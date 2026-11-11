@@ -31,3 +31,12 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local credentials (never commit) ###
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
