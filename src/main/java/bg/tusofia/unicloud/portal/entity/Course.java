@@ -21,16 +21,16 @@ public class Course {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @Column(name = "ects_credits", nullable = false)
-    private Integer ectsCredits;
+    @Column(name = "ects_credits", nullable = false, columnDefinition = "TINYINT UNSIGNED")
+    private Short ectsCredits;
 
     protected Course() {
     }
 
-    public Course(String code, String title, Integer ectsCredits) {
+    public Course(String code, String title, int ectsCredits) {
         this.code = code;
         this.title = title;
-        this.ectsCredits = ectsCredits;
+        this.ectsCredits = (short) ectsCredits;
     }
 
     public Integer getId() {
@@ -54,10 +54,10 @@ public class Course {
     }
 
     public Integer getEctsCredits() {
-        return ectsCredits;
+        return ectsCredits.intValue();
     }
 
-    public void setEctsCredits(Integer ectsCredits) {
-        this.ectsCredits = ectsCredits;
+    public void setEctsCredits(int ectsCredits) {
+        this.ectsCredits = (short) ectsCredits;
     }
 }

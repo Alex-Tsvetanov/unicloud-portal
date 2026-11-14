@@ -34,8 +34,8 @@ public class Student {
     @Column(nullable = false, length = 200)
     private String specialty;
 
-    @Column(name = "study_year", nullable = false)
-    private Integer studyYear;
+    @Column(name = "study_year", nullable = false, columnDefinition = "TINYINT UNSIGNED")
+    private Short studyYear;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -44,12 +44,12 @@ public class Student {
     protected Student() {
     }
 
-    public Student(User user, String facultyNumber, String specialty, Integer studyYear) {
+    public Student(User user, String facultyNumber, String specialty, int studyYear) {
         this.user = user;
         this.userId = user.getId();
         this.facultyNumber = facultyNumber;
         this.specialty = specialty;
-        this.studyYear = studyYear;
+        this.studyYear = (short) studyYear;
         this.status = Status.ACTIVE;
     }
 
@@ -78,11 +78,11 @@ public class Student {
     }
 
     public Integer getStudyYear() {
-        return studyYear;
+        return studyYear.intValue();
     }
 
-    public void setStudyYear(Integer studyYear) {
-        this.studyYear = studyYear;
+    public void setStudyYear(int studyYear) {
+        this.studyYear = (short) studyYear;
     }
 
     public Status getStatus() {

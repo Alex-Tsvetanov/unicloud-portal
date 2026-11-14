@@ -16,6 +16,7 @@ public record OfferingResponse(
         Boolean isOpen
 ) {
     public static OfferingResponse from(CourseOffering offering, int enrolledCount) {
+        int capacity = offering.getCapacity();
         return new OfferingResponse(
                 offering.getId(),
                 offering.getCourse().getId(),
@@ -24,9 +25,9 @@ public record OfferingResponse(
                 offering.getSemester(),
                 offering.getTeacher().getId(),
                 offering.getTeacher().getFirstName() + " " + offering.getTeacher().getLastName(),
-                offering.getCapacity(),
+                capacity,
                 enrolledCount,
-                offering.getCapacity() - enrolledCount,
+                capacity - enrolledCount,
                 offering.isOpen()
         );
     }

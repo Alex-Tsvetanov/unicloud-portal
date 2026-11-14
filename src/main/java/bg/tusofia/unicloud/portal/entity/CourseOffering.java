@@ -29,8 +29,8 @@ public class CourseOffering {
     @JoinColumn(name = "teacher_id", nullable = false)
     private User teacher;
 
-    @Column(nullable = false)
-    private Integer capacity;
+    @Column(nullable = false, columnDefinition = "SMALLINT UNSIGNED")
+    private Short capacity;
 
     @Column(name = "is_open", nullable = false)
     private boolean open = true;
@@ -38,11 +38,11 @@ public class CourseOffering {
     protected CourseOffering() {
     }
 
-    public CourseOffering(Course course, String semester, User teacher, Integer capacity) {
+    public CourseOffering(Course course, String semester, User teacher, int capacity) {
         this.course = course;
         this.semester = semester;
         this.teacher = teacher;
-        this.capacity = capacity;
+        this.capacity = (short) capacity;
         this.open = true;
     }
 
@@ -74,12 +74,12 @@ public class CourseOffering {
         this.teacher = teacher;
     }
 
-    public Integer getCapacity() {
+    public Short getCapacity() {
         return capacity;
     }
 
-    public void setCapacity(Integer capacity) {
-        this.capacity = capacity;
+    public void setCapacity(int capacity) {
+        this.capacity = (short) capacity;
     }
 
     public boolean isOpen() {
