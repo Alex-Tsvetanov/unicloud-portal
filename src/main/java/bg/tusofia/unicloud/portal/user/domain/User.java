@@ -35,6 +35,7 @@ public class User {
         this.firstName = requireNonBlank(firstName, "First name");
         this.lastName = requireNonBlank(lastName, "Last name");
         this.role = Role.valueOf(Objects.requireNonNull(role, "Role is required"));
+        this.permissionsMask = permissionsMask;
         this.permissionsMask = Role.valueOf(role).getDefaultPermissions();
         this.enabled = enabled;
         this.createdAt = createdAt;
@@ -44,6 +45,7 @@ public class User {
 
 
     public static User createNew(String email, String passwordHash, String firstName, String lastName,
+                                 String role) {
             String role) {
 
         return new User(null,
