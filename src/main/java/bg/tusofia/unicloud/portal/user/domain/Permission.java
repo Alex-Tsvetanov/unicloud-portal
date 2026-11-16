@@ -21,6 +21,7 @@ public enum Permission {
     ENROLLMENT_REQUEST_CREATE(8),
     ENROLLMENT_REQUEST_ACCEPT_REJECT(9);
 
+
     private final int bitPosition;
 
     Permission(int bitPosition) {
@@ -29,6 +30,10 @@ public enum Permission {
 
     public long getMask() {
         return 1L << bitPosition;
+    }
+
+    public boolean isGranted(long mask) {
+        return (mask & getMask()) != 0;
     }
 
     public static Set<Permission> fromMask(long mask) {
