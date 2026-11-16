@@ -95,12 +95,30 @@ jobs:
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # The RSA key pair the app signs login tokens with (PEM text). Every replica must use
+          # the same pair, or a token issued by one replica is rejected by the next.
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
         run: |
+          if [[ -z "$JWT_PRIVATE_KEY" || -z "$JWT_PUBLIC_KEY" ]]; then
+            echo "Add the JWT_PRIVATE_KEY and JWT_PUBLIC_KEY repository secrets (see the README's 'The pipeline')" >&2
+            exit 1
+          fi
           az extension add --name containerapp --upgrade --only-show-errors
+          # The app reads app.jwt.private-key / app.jwt.public-key; Spring maps these variables to
+          # them and accepts the PEM text directly, so no key file is needed in the image.
+          ENV_VARS=(DATABASE_URL=secretref:db-url
+                    APP_JWT_PRIVATE_KEY=secretref:jwt-private-key
+                    APP_JWT_PUBLIC_KEY=secretref:jwt-public-key)
           if az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" > /dev/null 2>&1; then
+            az containerapp secret set -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+              --secrets db-url="$DATABASE_URL" jwt-private-key="$JWT_PRIVATE_KEY" jwt-public-key="$JWT_PUBLIC_KEY" \
+              --output none
             # Java needs 0.5 vCPU and 1 GiB per replica; setting it on every deploy keeps it that way
             az containerapp update -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
-              --image "$IMAGE" --cpu 0.5 --memory 1.0Gi --output none
+              --image "$IMAGE" --cpu 0.5 --memory 1.0Gi \
+              --set-env-vars "${ENV_VARS[@]}" \
+              --output none
           else
             # At least 2 replicas (no single point of failure), up to 10 when a replica
             # has more than 20 requests in flight
@@ -111,8 +129,8 @@ jobs:
               --cpu 0.5 --memory 1.0Gi \
               --min-replicas 2 --max-replicas 10 \
               --scale-rule-name http-rush --scale-rule-type http --scale-rule-http-concurrency 20 \
-              --secrets db-url="$DATABASE_URL" \
-              --env-vars DATABASE_URL=secretref:db-url \
+              --secrets db-url="$DATABASE_URL" jwt-private-key="$JWT_PRIVATE_KEY" jwt-public-key="$JWT_PUBLIC_KEY" \
+              --env-vars "${ENV_VARS[@]}" \
               --output none
           fi
 
