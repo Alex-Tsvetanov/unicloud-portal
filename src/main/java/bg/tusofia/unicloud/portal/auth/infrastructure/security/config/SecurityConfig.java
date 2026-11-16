@@ -56,6 +56,13 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // The deploy polls /health until it reports the new commit, and / shows
+                        // which replica answered (README, "Rules the code must follow")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/health",
+                                "/"
+                        ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/auth/login"

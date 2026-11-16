@@ -35,8 +35,11 @@ public class User {
         this.firstName = requireNonBlank(firstName, "First name");
         this.lastName = requireNonBlank(lastName, "Last name");
         this.role = Role.valueOf(Objects.requireNonNull(role, "Role is required"));
-        this.permissionsMask = permissionsMask;
-        this.permissionsMask = Role.valueOf(role).getDefaultPermissions();
+        // A new user starts with the role's default permissions; an existing user keeps the
+        // mask stored for them (grants and revocations must survive a reload).
+        this.permissionsMask = permissionsMask != null
+                ? permissionsMask
+                : this.role.getDefaultPermissions();
         this.enabled = enabled;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
@@ -46,7 +49,6 @@ public class User {
 
     public static User createNew(String email, String passwordHash, String firstName, String lastName,
                                  String role) {
-            String role) {
 
         return new User(null,
                 email,
@@ -72,7 +74,6 @@ public class User {
             LocalDateTime createdAt,
             LocalDateTime updatedAt) {
 
-        Objects.requireNonNull(id, "Existing user must have an ID");
         Objects.requireNonNull(id, "Existing user must have an ID");
         Objects.requireNonNull(createdAt, "Creation timestamp is required");
         Objects.requireNonNull(updatedAt, "Update timestamp is required");

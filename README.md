@@ -68,17 +68,25 @@ src/test/java/                    Tests, run against MySQL 8.4 in the pipeline
      -e MYSQL_ROOT_PASSWORD=dev -e MYSQL_DATABASE=unicloud mysql:8.4
    ```
 
-3. Wait about 20 seconds for MySQL to come up, then start the app:
+3. Create the key pair the app signs login tokens with. It lives in `secrets/`, which git ignores, so every checkout makes its own (once):
+
+   ```bash
+   mkdir -p secrets
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/private.pem
+   openssl pkey -in secrets/private.pem -pubout -out secrets/public.pem
+   ```
+
+4. Wait about 20 seconds for MySQL to come up, then start the app:
 
    ```bash
    ./mvnw spring-boot:run
    ```
 
-4. Codespaces offers to open port 8080 in the browser. You should see JSON with `"service":"unicloud-portal"`, and Flyway has created the tables in your local database.
+5. Codespaces offers to open port 8080 in the browser. You should see JSON with `"service":"unicloud-portal"`, and Flyway has created the tables in your local database.
 
 ### Option B: your own computer
 
-Install JDK 25 (Eclipse Temurin), Docker and Git, then clone the repo and follow steps 2 to 4 above. The app runs at http://localhost:8080.
+Install JDK 25 (Eclipse Temurin), Docker and Git, then clone the repo and follow steps 2 to 5 above. The app runs at http://localhost:8080.
 
 ```bash
 git clone https://github.com/rata5/unicloud-portal.git
@@ -89,7 +97,7 @@ cd unicloud-portal
 
 | Task | Command |
 | --- | --- |
-| Run all tests (the local MySQL must be running) | `./mvnw verify` |
+| Run all tests (the local MySQL must be running; the tests make their own JWT keys) | `./mvnw verify` |
 | Start the app | `./mvnw spring-boot:run` |
 | Stop or start the local database | `docker stop unicloud-mysql`, `docker start unicloud-mysql` |
 | Wipe the local database and start fresh | `docker rm -f unicloud-mysql`, then the `docker run` command again |
@@ -155,6 +163,7 @@ erDiagram
     varchar first_name
     varchar last_name
     varchar role "STUDENT TEACHER INSPECTOR ADMIN"
+    bigint permissions_mask "bits of user.domain.Permission"
     boolean enabled
   }
   STUDENTS {
@@ -266,5 +275,6 @@ Check with DevOps before running it against production. Each run spends the data
 | `test` fails with `Schema-validation: missing column` or `missing table` | An entity doesn't match the tables. Add a migration or fix the entity |
 | App won't start: `Migration checksum mismatch` | An applied migration was edited. Undo the edit and put the change in a new `V...` file |
 | Locally: `Communications link failure` | The local MySQL isn't running. Run `docker start unicloud-mysql` and wait 20 seconds |
+| Locally: app won't start, `secrets/private.pem` or `secrets/public.pem` not found | Create the JWT key pair (step 3 of "Get set up") |
 | Locally: port 3306 is already in use | Another MySQL is running. Stop it, or run the container with `-p 3307:3306` and set `DATABASE_URL=jdbc:mysql://localhost:3307/unicloud?user=root&password=dev&sslMode=REQUIRED` |
 | `deploy` fails | Usually Azure, not your code. Send the run's link to DevOps |
