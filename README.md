@@ -143,7 +143,9 @@ A red job stops everything after it, so a failing test never reaches production.
 
 A failed `deploy` is usually an Azure problem rather than your code: send the run's link to the team's DevOps engineer.
 
-The pipeline's secrets (`AZURE_*`, `DATABASE_URL`, `GHCR_PAT`) are managed by DevOps under **Settings → Secrets and variables → Actions**. You don't need them, and credentials must never appear in code.
+The pipeline's secrets (`AZURE_*`, `DATABASE_URL`, `GHCR_PAT`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`) are managed by DevOps under **Settings → Secrets and variables → Actions**. You don't need them, and credentials must never appear in code.
+
+`JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` hold the PEM text of the key pair production signs login tokens with (the deploy passes them to the app as Container App secrets). Create it once with the `openssl` commands from "Get set up", paste each file's full contents into its secret, and keep the private key nowhere else. Rotating the pair logs every user out, so do it between semesters.
 
 ## Changing the database
 
