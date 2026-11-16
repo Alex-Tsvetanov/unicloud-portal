@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Дисциплини · UniCloud Portal</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<div id="mock-banner" class="mock-banner" hidden>ДЕМО РЕЖИМ: данните са фалшиви, сървърът не се използва</div>
+
+<header class="topbar">
+    <span class="brand">UniCloud Portal</span>
+    <nav>
+        <a href="/profile.html">Профил</a>
+        <a href="/courses.html" aria-current="page">Дисциплини</a>
+        <button id="logout" type="button" class="link-button">Изход</button>
+    </nav>
+</header>
+
+<main class="card card-wide">
+    <h1>Дисциплини</h1>
+    <p class="muted">Дисциплини, отворени за записване</p>
+
+    <p id="message" class="message" role="status" hidden></p>
+    <p id="loading" class="muted">Зареждане…</p>
+
+    <table id="table" hidden>
+        <thead>
+        <tr>
+            <th class="col-code">Код</th>
+            <th>Дисциплина</th>
+            <th class="col-teacher">Преподавател</th>
+            <th>Места</th>
+            <th class="actions-col"></th>
+        </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="muted" hidden>Няма отворени дисциплини.</p>
+</main>
+
+<script src="/js/api.js"></script>
+<script src="/js/courses.js"></script>
+</body>
+</html>

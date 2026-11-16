@@ -63,6 +63,15 @@ public class SecurityConfig {
                                 "/health",
                                 "/"
                         ).permitAll()
+                        // The frontend's static files (src/main/resources/static). The pages hold no
+                        // data: they call the API, which still requires a token.
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/*.html",
+                                "/css/**",
+                                "/js/**",
+                                "/favicon.ico"
+                        ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/auth/login"
