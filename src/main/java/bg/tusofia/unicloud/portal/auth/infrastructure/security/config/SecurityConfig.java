@@ -125,10 +125,12 @@ public class SecurityConfig {
     }
 
     private JwtAuthenticationConverter jwtAuthenticationConverter() {
+        // JwtAccessTokenIssuer puts the user's single role in the "role" claim; it becomes the
+        // ROLE_<name> authority that hasRole('<name>') checks.
         JwtGrantedAuthoritiesConverter roles =
                 new JwtGrantedAuthoritiesConverter();
 
-        roles.setAuthoritiesClaimName("roles");
+        roles.setAuthoritiesClaimName("role");
         roles.setAuthorityPrefix("ROLE_");
 
         JwtGrantedAuthoritiesConverter permissions =

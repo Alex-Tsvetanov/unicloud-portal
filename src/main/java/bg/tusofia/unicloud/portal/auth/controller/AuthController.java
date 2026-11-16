@@ -42,7 +42,7 @@ public class AuthController {
     public Map<String, Object> me(@AuthenticationPrincipal Jwt jwt) {
         return Map.of(
                 "userId", jwt.getSubject(),
-                "roles", jwt.getClaimAsStringList("roles")
+                "role", jwt.getClaimAsString("role")
         );
     }
 }
