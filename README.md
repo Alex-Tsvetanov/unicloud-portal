@@ -41,6 +41,7 @@ flowchart LR
 - Every merge to `main` runs `test`, `build` and `deploy`. New replicas start before old ones stop, so the portal stays up during a deploy.
 - Production runs 2 to 10 replicas behind Azure's load balancer and adds replicas as traffic grows.
 - Only Flyway migrations create or change tables. Hibernate never does.
+- Every environment describes its own API: Swagger UI at `/swagger-ui.html`, and the OpenAPI JSON at `/v3/api-docs`, which other UniCloud teams can generate clients from. Both open without a token; calling an endpoint from Swagger UI still needs one (log in with `POST /api/v1/auth/login`, then paste `accessToken` under **Authorize**).
 
 ## Environments
 
@@ -122,6 +123,7 @@ cd unicloud-portal
 | --- | --- |
 | Run all tests (the local MySQL must be running; the tests make their own JWT keys) | `./mvnw verify` |
 | Start the app | `./mvnw spring-boot:run` |
+| Browse and try the API | http://localhost:8080/swagger-ui.html (the app must be running) |
 | Stop or start the local database | `docker stop unicloud-mysql`, `docker start unicloud-mysql` |
 | Wipe the local database and start fresh | `docker rm -f unicloud-mysql`, then the `docker run` command again |
 | Open a SQL prompt | `docker exec -it unicloud-mysql mysql -uroot -pdev unicloud` |
