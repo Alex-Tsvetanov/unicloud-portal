@@ -1,12 +1,13 @@
 # Tests every pull request against MySQL 8.4 (production's database) and PostgreSQL 17
-# (staging's). On main it also builds the image and deploys it to Azure Container Apps.
-# On develop it only tests and builds: Render deploys staging from develop by itself.
+# (staging's). Every merge to main also builds the image, deploys staging on Render at once,
+# and deploys production on Azure Container Apps once a reviewer approves it (the "production"
+# environment). There is one branch: main.
 name: build-and-deploy
 
 on:
   pull_request:
   push:
-    branches: [main, develop]
+    branches: [main]
 
 env:
   RESOURCE_GROUP: unicloud-rg           # must match setup-azure.sh
@@ -49,7 +50,8 @@ jobs:
           ./mvnw -B verify
 
   # Staging runs on PostgreSQL with the copies in db/migration-postgresql. This runs the same
-  # tests there. Production's deploy doesn't wait for it, so it can never hold up production.
+  # tests there. Staging's deploy waits for it; production's doesn't, so a problem that only
+  # PostgreSQL has can never hold up production.
   test-postgres:
     runs-on: ubuntu-latest
     permissions:
@@ -110,10 +112,39 @@ jobs:
           echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push "${{ steps.tag.outputs.image }}"
 
+  # Render builds staging itself from this commit. The deploy hook names the exact commit, so
+  # staging never runs code whose PostgreSQL tests failed. Production doesn't wait for this job.
+  deploy-staging:
+    needs: [test-postgres, build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency: staging
+    steps:
+      - name: Ask Render to deploy this commit
+        env:
+          # The service's Deploy Hook URL (Render: unicloud-portal-staging, Settings). It is a
+          # secret: anyone who has it can deploy.
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "$RENDER_DEPLOY_HOOK" ]]; then
+            echo "::warning::RENDER_DEPLOY_HOOK is not set, so staging was not deployed (see the README's 'The pipeline')"
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK&ref=$GITHUB_SHA" -o /dev/null
+          echo "Render is deploying $GITHUB_SHA to staging. It takes a few minutes." | tee -a "$GITHUB_STEP_SUMMARY"
+
   deploy:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # The job waits here until a reviewer of the "production" environment approves it
+    # (Settings, Environments). Approve after checking the change on staging. When a newer
+    # merge arrives, GitHub cancels the older deploy still waiting, so approving always
+    # ships the latest main.
+    environment:
+      name: production
+      url: ${{ steps.live.outputs.url }}
     concurrency: production              # never run two deploys at once
     permissions:
       contents: read
@@ -172,12 +203,14 @@ jobs:
           fi
 
       - name: Check the new version is live
+        id: live
         run: |
           URL="https://$(az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)"
           for attempt in $(seq 1 30); do
             BODY=$(curl -fsS "$URL/health" || true)
             if [[ "$BODY" == *"$GITHUB_SHA"* ]]; then
               echo "Live at $URL" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "url=$URL" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 10
