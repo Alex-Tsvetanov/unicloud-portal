@@ -111,6 +111,12 @@ jobs:
         run: |
           echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push "${{ steps.tag.outputs.image }}"
+          # "latest" is what the other modules' developers run as a local SSO mock
+          # (mock/docker-compose.yml). It always matches production.
+          LATEST="${{ steps.tag.outputs.image }}"
+          LATEST="${LATEST%:*}:latest"
+          docker tag "${{ steps.tag.outputs.image }}" "$LATEST"
+          docker push "$LATEST"
 
   # Render builds staging itself from this commit. The deploy hook names the exact commit, so
   # staging never runs code whose PostgreSQL tests failed. Production doesn't wait for this job.
@@ -179,6 +185,12 @@ jobs:
                     APP_JWT_PRIVATE_KEY=secretref:jwt-private-key
                     APP_JWT_PUBLIC_KEY=secretref:jwt-public-key)
           if az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" > /dev/null 2>&1; then
+            # Single sign-on tokens name the portal's public address as their issuer
+            # (docs/sso.md). A brand-new app has no address yet; until the next deploy the app
+            # works it out from each request.
+            FQDN=$(az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn -o tsv)
+            ENV_VARS+=(APP_SSO_ISSUER="https://$FQDN")
             az containerapp secret set -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
               --secrets db-url="$DATABASE_URL" jwt-private-key="$JWT_PRIVATE_KEY" jwt-public-key="$JWT_PUBLIC_KEY" \
               --output none
