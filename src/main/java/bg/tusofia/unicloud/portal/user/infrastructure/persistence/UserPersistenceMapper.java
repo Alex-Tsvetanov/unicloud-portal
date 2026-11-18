@@ -23,7 +23,8 @@ public final class UserPersistenceMapper {
                 user.getLastName(),
                 user.getRole(),
                 user.getPermissionsMask(),
-                user.isEnabled()
+                user.isEnabled(),
+                user.getCreatedAt()
         );
     }
 

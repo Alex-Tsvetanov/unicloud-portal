@@ -59,7 +59,8 @@ public class UserJPAEntity {
             String lastName,
             Role role,
             Long permissionMask,
-            boolean enabled) {
+            boolean enabled,
+            LocalDateTime createdAt) {
 
         this.id = id;
         this.email = email;
@@ -69,6 +70,10 @@ public class UserJPAEntity {
         this.role = role.toString();
         this.permissionMask = permissionMask;
         this.enabled = enabled;
+        // Never written (insertable and updatable are false), but kept on the entity: saving an
+        // existing user merges this object, and without it the saved user would come back with
+        // no creation time, which User.reconstitute refuses.
+        this.createdAt = createdAt;
     }
 
     public Long getId() { return id; }

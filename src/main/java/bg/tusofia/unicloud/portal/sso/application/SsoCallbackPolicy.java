@@ -18,7 +18,7 @@ import java.util.Set;
  *       module and match exactly, and its host must be listed in {@code app.sso.allowed-callback-hosts}
  *       (the file sso-callback-hosts.properties). https only; plain http only for a listed
  *       loopback host.</li>
- *   <li>{@code any} (staging and the local mock): any absolute http or https URL, registered or
+ *   <li>{@code any} (staging): any absolute http or https URL, registered or
  *       not, so module developers can point a test login anywhere.</li>
  * </ul>
  */

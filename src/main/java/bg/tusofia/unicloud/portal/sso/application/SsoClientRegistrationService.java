@@ -61,14 +61,12 @@ public class SsoClientRegistrationService {
         this.apiAudience = apiAudience;
     }
 
-    /** {@code registeredBy}: the admin's user id, for the audit log. The secret is random. */
+    /**
+     * {@code registeredBy}: who asked, for the audit log (an admin's user id, or "staging-tools").
+     * The secret is random and returned once.
+     */
     public RegisterSsoClientResponse register(RegisterSsoClientRequest request, String registeredBy) {
-        return register(request, registeredBy, newSecret());
-    }
-
-    /** As above with a chosen secret. Only the local mock uses this (MockSsoSeeder). */
-    public RegisterSsoClientResponse register(
-            RegisterSsoClientRequest request, String registeredBy, String secret) {
+        String secret = newSecret();
 
         // A module's tokens carry its client id as "aud". The portal API's own audience must
         // never be one, or the API's audience check would accept that module's tokens.
