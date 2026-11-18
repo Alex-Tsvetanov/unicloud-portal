@@ -1,6 +1,6 @@
 package bg.tusofia.unicloud.portal.auth.infrastructure.security.config;
 
-import com.nimbusds.jose.jwk.JWK;
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -44,7 +45,12 @@ public class SecurityConfig {
     private String audience;
 
 
+    /**
+     * The portal's own API and pages. The SSO endpoints (/oauth2/**, /.well-known/**, /userinfo,
+     * /connect/logout) have their own chain, which runs first: SsoAuthorizationServerConfig.
+     */
     @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http)
             throws Exception {
 
@@ -76,6 +82,13 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/v1/auth/login"
                         ).permitAll()
+                        // Ends the SSO browser session, if any. Open so that logout works with an
+                        // expired token too. Another site cannot call it: a cross-site DELETE needs
+                        // CORS consent, and the SameSite=Lax cookie is not sent with it anyway.
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/auth/sso-session"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth -> oauth
@@ -100,15 +113,22 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * The signing key pair. Also published at /oauth2/jwks for the SSO modules. The key
+     * id ("kid") is the key's RFC 7638 thumbprint, so a future second key gets a different one.
+     */
     @Bean
-    JwtEncoder jwtEncoder() {
-        JWK jwk = new RSAKey.Builder(publicKey)
+    JWKSource<SecurityContext> jwkSource() throws JOSEException {
+        RSAKey rsaKey = new RSAKey.Builder(publicKey)
                 .privateKey(privateKey)
+                .keyIDFromThumbprint()
                 .build();
 
-        JWKSource<SecurityContext> jwkSource =
-                new ImmutableJWKSet<>(new JWKSet(jwk));
+        return new ImmutableJWKSet<>(new JWKSet(rsaKey));
+    }
 
+    @Bean
+    JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
         return new NimbusJwtEncoder(jwkSource);
     }
 

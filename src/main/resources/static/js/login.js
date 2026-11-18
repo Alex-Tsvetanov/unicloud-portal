@@ -1,7 +1,25 @@
 (() => {
+    // login.html?sso=1: another UniCloud module sent the user here (docs/sso.md). After login the
+    // browser goes back to that module instead of the profile.
+    const sso = new URLSearchParams(location.search).get('sso') === '1';
+
+    async function continueSso() {
+        const next = await Api.ssoSession();
+        if (next) {
+            location.replace(next);
+        } else {
+            showError('Времето за вход изтече. Върнете се в приложението и опитайте отново.');
+        }
+    }
+
     if (Api.isLoggedIn()) {
-        location.replace('/profile.html');
-        return;
+        if (!sso) {
+            location.replace('/profile.html');
+            return;
+        }
+        // Already logged in to the portal: no password needed. If the token is refused, the form
+        // stays and the user logs in again.
+        continueSso().catch(() => Api.logout());
     }
 
     const form = document.getElementById('login-form');
@@ -31,7 +49,8 @@
         submit.disabled = true;
         try {
             await Api.login(email.value.trim(), password.value);
-            location.assign('/profile.html');
+            if (sso) await continueSso();
+            else location.assign('/profile.html');
         } catch (e) {
             if (e.status === 401 || e.status === 400) showError('Грешен имейл или парола.');
             else if (e.status === 404) showError('Входът още не е наличен на сървъра.');

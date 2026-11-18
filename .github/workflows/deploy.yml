@@ -148,6 +148,12 @@ jobs:
                     APP_JWT_PRIVATE_KEY=secretref:jwt-private-key
                     APP_JWT_PUBLIC_KEY=secretref:jwt-public-key)
           if az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" > /dev/null 2>&1; then
+            # Single sign-on tokens name the portal's public address as their issuer
+            # (docs/sso.md). A brand-new app has no address yet; until the next deploy the app
+            # works it out from each request.
+            FQDN=$(az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
+              --query properties.configuration.ingress.fqdn -o tsv)
+            ENV_VARS+=(APP_SSO_ISSUER="https://$FQDN")
             az containerapp secret set -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
               --secrets db-url="$DATABASE_URL" jwt-private-key="$JWT_PRIVATE_KEY" jwt-public-key="$JWT_PUBLIC_KEY" \
               --output none

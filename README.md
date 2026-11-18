@@ -72,11 +72,13 @@ src/main/java/bg/tusofia/unicloud/portal/
     HealthController.java         /health and /  (keep them, see Rules)
     ServedByFilter.java           X-Served-By header (keep it)
     Replica.java                  Replica name for the two above
+    sso/                          Single sign-on for the other UniCloud modules (docs/sso.md)
 src/main/resources/
     application.properties        Settings; production values come from environment variables
     db/migration/                 Flyway migrations for MySQL: V1__init_schema.sql, then V2__..., V3__...
     db/migration-postgresql/      The same migrations for PostgreSQL, used by staging
 src/test/java/                    Tests, run against MySQL 8.4 in the pipeline
+docs/sso.md                       Single sign-on: how other modules log users in through the portal
 ```
 
 ## Get set up
@@ -182,7 +184,7 @@ The pipeline's secrets (`AZURE_*`, `DATABASE_URL`, `GHCR_PAT`, `JWT_PRIVATE_KEY`
 
 `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` hold the PEM text of the key pair production signs login tokens with (the deploy passes them to the app as Container App secrets). Create it once with the `openssl` commands from "Get set up", paste each file's full contents into its secret, and keep the private key nowhere else. Rotating the pair logs every user out, so do it between semesters.
 
-Staging has its own settings, kept in Render on the `unicloud-portal-staging` service's **Environment** page: its `DATABASE_URL` (Render's PostgreSQL database), `SPRING_FLYWAY_LOCATIONS=classpath:db/migration-postgresql`, and its own key pair in `APP_JWT_PRIVATE_KEY` and `APP_JWT_PUBLIC_KEY`. Never reuse production's values there.
+Staging has its own settings, kept in Render on the `unicloud-portal-staging` service's **Environment** page: its `DATABASE_URL` (Render's PostgreSQL database), `SPRING_FLYWAY_LOCATIONS=classpath:db/migration-postgresql`, its own key pair in `APP_JWT_PRIVATE_KEY` and `APP_JWT_PUBLIC_KEY`, and `APP_SSO_ISSUER` set to staging's `https://` address (the issuer of single sign-on tokens, see [docs/sso.md](docs/sso.md)). Never reuse production's values there. Production's `APP_SSO_ISSUER` is set by the `deploy` job.
 
 ## Changing the database
 

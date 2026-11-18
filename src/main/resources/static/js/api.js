@@ -2,6 +2,8 @@
 //
 // Backend contract:
 //   POST  /api/v1/auth/login                 {email, password} -> {accessToken, tokenType, expiresIn} | 401
+//   POST  /api/v1/auth/sso-session           -> {continueUrl} (single sign-on, see docs/sso.md)
+//   DELETE /api/v1/auth/sso-session          ends the single sign-on session (the "Изход" button)
 //   GET   /api/v1/users/me                   -> {id, email, firstName, lastName, role,
 //                                                 student: {facultyNumber, specialty, studyYear, status} | null}
 //                                                (CurrentUserController; on a 404 the profile shows
@@ -19,6 +21,7 @@
 const Api = (() => {
     const URLS = {
         login: '/api/v1/auth/login',
+        ssoSession: '/api/v1/auth/sso-session',
         me: '/api/v1/users/me',
         offerings: '/api/v1/offerings?open=true',
         enroll: '/api/v1/enrollments',
@@ -86,8 +89,19 @@ const Api = (() => {
         return !!c && (!c.exp || c.exp * 1000 > Date.now());
     }
 
+    // Forgets this tab's login. Used when the token is missing, expired or refused. The single
+    // sign-on session stays: the token lives per tab, the SSO session per browser.
     function logout() {
         sessionStorage.removeItem(TOKEN_KEY);
+    }
+
+    // The user pressed "Изход": also ends the single sign-on session, so the other modules ask
+    // for the password again. keepalive lets the request finish while the page navigates away.
+    function logoutEverywhere() {
+        logout();
+        if (!mock) {
+            fetch(URLS.ssoSession, { method: 'DELETE', keepalive: true }).catch(() => {});
+        }
     }
 
     function currentUserId() {
@@ -120,7 +134,7 @@ const Api = (() => {
 
         if (!response.ok) {
             // An expired or rejected token: back to the login page.
-            if (response.status === 401 && url !== URLS.login) {
+            if (response.status === 401 && url !== URLS.login && !options.keepPageOn401) {
                 logout();
                 location.replace('/login.html');
             }
@@ -140,6 +154,16 @@ const Api = (() => {
         });
         if (!body || !body.accessToken) throw new ApiError(500, 'Сървърът не върна токен.');
         sessionStorage.setItem(TOKEN_KEY, body.accessToken);
+    }
+
+    // Single sign-on: another module sent the user here to log in (login.html?sso=1). Turns the
+    // portal login into the SSO session and returns where to continue: a /oauth2/authorize path,
+    // or null when nothing is waiting any more.
+    async function ssoSession() {
+        const body = await request(URLS.ssoSession, { method: 'POST', keepPageOn401: true });
+        const next = body && body.continueUrl;
+        const ok = next === '/oauth2/authorize' || (typeof next === 'string' && next.startsWith('/oauth2/authorize?'));
+        return ok ? next : null;
     }
 
     // The full profile. Until the backend has /users/me, falls back to what the token holds.
@@ -278,7 +302,7 @@ const Api = (() => {
         if (banner && mock) banner.hidden = false;
     });
 
-    return { login, logout, isLoggedIn, currentRole, me, offerings, myEnrollments, enroll, cancel, ApiError };
+    return { login, logout, logoutEverywhere, isLoggedIn, ssoSession, currentRole, me, offerings, myEnrollments, enroll, cancel, ApiError };
 })();
 
 // Shared page helpers.
@@ -291,7 +315,7 @@ const Ui = {
         const logout = document.getElementById('logout');
         if (logout) {
             logout.addEventListener('click', () => {
-                Api.logout();
+                Api.logoutEverywhere();
                 location.replace('/login.html');
             });
         }
