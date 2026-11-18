@@ -8,7 +8,7 @@ The Unified University Portal: accounts, academic profiles and course enrollment
 
 **Staging (Render):** `https://<staging-url>` (the address is at the top of the `unicloud-portal-staging` service in the Render dashboard)
 
-> Every merge to `develop` goes to staging, and every merge to `main` reaches production within minutes. Try every change on staging first, and merge into `main` only what you would show the Academic Council.
+> There is one branch, `main`. Every merge goes to staging within minutes, and to production once a reviewer approves the deploy. Try every change on staging first, and approve only what you would show the Academic Council.
 
 ## Contents
 
@@ -30,15 +30,16 @@ The Unified University Portal: accounts, academic profiles and course enrollment
 flowchart LR
     PR[Pull request] --> T["test<br/>MySQL 8.4 + Flyway + tests"]
     T --> B["build<br/>Docker image"]
-    B -. merge to develop .-> S["Render<br/>staging"]
-    B -. merge to main .-> D["deploy<br/>Azure Container Apps"]
+    B -. merge to main .-> S["deploy-staging<br/>Render"]
+    B -. merge to main .-> A{{"approval"}}
+    A --> D["deploy<br/>Azure Container Apps"]
     S --> SDB[("PostgreSQL 17<br/>on Render")]
     D --> DB[("unicloud<br/>Azure MySQL 8.4")]
 ```
 
-- Every pull request runs `test` and `build`. Nothing is deployed.
-- Every merge to `develop` runs `test`, `test-postgres` and `build`. Once all of them pass, Render rebuilds the app from `develop` and deploys it to staging.
-- Every merge to `main` runs `test`, `build` and `deploy`. New replicas start before old ones stop, so the portal stays up during a deploy.
+- Every pull request runs `test`, `test-postgres` and `build`. Nothing is deployed.
+- Every merge to `main` runs the same jobs. Once they pass, `deploy-staging` asks Render to deploy that exact commit to staging.
+- At the same time, `deploy` waits for a reviewer's approval. Once approved, it deploys the same commit to production. New replicas start before old ones stop, so the portal stays up during a deploy.
 - Production runs 2 to 10 replicas behind Azure's load balancer and adds replicas as traffic grows.
 - Only Flyway migrations create or change tables. Hibernate never does.
 
@@ -46,15 +47,15 @@ flowchart LR
 
 | | Staging | Production |
 | --- | --- | --- |
-| Branch | `develop` | `main` |
+| Branch | `main` | `main`, after approval |
 | Runs on | Render, free web service, Frankfurt | Azure Container Apps, Frankfurt, 2 to 10 replicas |
 | Database | PostgreSQL 17, Render's free database in Frankfurt | MySQL 8.4 on Azure (`unicloud`) |
 | Migrations | `db/migration-postgresql` | `db/migration` |
 | Login keys | Staging's own JWT key pair, set in Render | Production's pair, in the GitHub secrets |
-| Deployed by | Render, once every check passes on `develop` | The `deploy` job, on every merge to `main` |
+| Deployed by | The `deploy-staging` job, through Render's deploy hook, on every merge | The `deploy` job, once a reviewer approves it |
 | Data | Test data only | Real data |
 
-Both databases get the same tables from Flyway: production from the MySQL files in `db/migration`, staging from their PostgreSQL copies in `db/migration-postgresql`. Staging applies a new migration when it reaches `develop`, production when it reaches `main`. Staging's database lives on Render, apart from production's, so nothing on staging can change production data.
+Both databases get the same tables from Flyway: production from the MySQL files in `db/migration`, staging from their PostgreSQL copies in `db/migration-postgresql`. Staging applies a new migration right after the merge, production when its deploy is approved. Staging's database lives on Render, apart from production's, so nothing on staging can change production data.
 
 Staging sleeps after 15 minutes without visitors, so the first page after a quiet spell can take 1 to 3 minutes. Render deletes its free database 30 days after it's created, so DevOps replaces staging's database each month; Flyway rebuilds the tables and the test data on the next start. Never copy production data into staging.
 
@@ -83,7 +84,7 @@ src/test/java/                    Tests, run against MySQL 8.4 in the pipeline
 
 ### Option A: GitHub Codespaces (recommended)
 
-1. On the repo page, click **Code → Codespaces → Create codespace on develop**. The first start takes a few minutes while it installs Java 25 and Docker.
+1. On the repo page, click **Code → Codespaces → Create codespace on main**. The first start takes a few minutes while it installs Java 25 and Docker.
 2. In the terminal, start a local MySQL 8.4:
 
    ```bash
@@ -130,12 +131,12 @@ The app reads its database address from `DATABASE_URL`. When that isn't set, it 
 
 ## Everyday workflow
 
-`develop` and `main` are protected: nobody can push to them directly, and every change goes through a pull request whose `test` and `build` checks must pass.
+`main` is protected: nobody can push to it directly, and every change goes through a pull request whose `test`, `test-postgres` and `build` checks must pass. Each change needs one pull request. It reaches staging and production from the same merge.
 
-1. Start a branch from the latest `develop`:
+1. Start a branch from the latest `main`:
 
    ```bash
-   git switch develop && git pull
+   git switch main && git pull
    git switch -c feature/short-description
    ```
 
@@ -148,20 +149,21 @@ The app reads its database address from `DATABASE_URL`. When that isn't set, it 
    git push -u origin feature/short-description
    ```
 
-4. Open a pull request into `develop`, which GitHub picks by default. Wait for green `test` and `build` checks and a teammate's approval.
+4. Open a pull request into `main`. Wait for green checks and a teammate's approval.
 5. Click **Squash and merge**, then delete the branch.
 6. A few minutes later, Render deploys it to staging. Try your change there before it goes any further.
 
 ### Releasing to production
 
-DevOps moves what's on staging to production:
+Every merge starts a `deploy` job that waits for approval. The reviewers of the `production` environment (DevOps) approve it:
 
-1. Open a pull request from `develop` into `main`, titled `Release <date>`.
-2. Wait for green `test` and `build` checks and a teammate's approval.
-3. Merge it with **Create a merge commit**. Don't squash: squashing makes `main` and `develop` drift apart, and the next release then shows old changes as conflicts.
-4. Watch the deploy in the **Actions** tab. When it's green, `/health` on production reports the release's commit.
+1. Check the change on staging.
+2. In the **Actions** tab, open the run for that merge. It shows **Review deployments** on the waiting `deploy` job.
+3. Tick `production` and click **Approve and deploy**. When the job is green, `/health` on production reports that commit.
 
-An urgent production fix goes the other way: branch from `main` and open the pull request into `main`. Afterwards, open a pull request from `main` into `develop` and merge it with **Create a merge commit**, so staging gets the fix too. Do the same after reverting a release on `main` (see [Checking and rolling back production](#checking-and-rolling-back-production)).
+Only the newest merge has a deploy waiting. When a new merge arrives, GitHub cancels the older deploy that is still waiting, so approving always ships the latest `main`, with every change before it. Approve only when everything merged since the last release works on staging. If one of those changes doesn't work, revert it first (see [Checking and rolling back production](#checking-and-rolling-back-production)) and approve the revert's deploy.
+
+An urgent production fix follows the same path: one pull request into `main`, then approve its deploy straight away.
 
 ## The pipeline
 
@@ -169,12 +171,13 @@ It's defined in `.github/workflows/deploy.yml`.
 
 | Job | Runs on | What it does | Typical time |
 | --- | --- | --- | --- |
-| `test` | Every pull request, and every merge to `develop` or `main` | Starts MySQL 8.4, lets Flyway apply every migration, runs `./mvnw verify` | About 2 min |
-| `test-postgres` | Every pull request, and every merge to `develop` or `main` | Runs the same tests on PostgreSQL 17 with the migrations in `db/migration-postgresql`, as staging does. Production's deploy doesn't wait for it | About 2 min |
-| `build` | Every pull request, and every merge to `develop` or `main` | Builds the Docker image; on `main` it also pushes it to GHCR, tagged with the commit SHA | About 3 min |
-| `deploy` | Merges to `main` only | Deploys the image to Azure Container Apps and waits until `/health` shows the new commit | 2 to 4 min |
+| `test` | Every pull request, and every merge to `main` | Starts MySQL 8.4, lets Flyway apply every migration, runs `./mvnw verify` | About 2 min |
+| `test-postgres` | Every pull request, and every merge to `main` | Runs the same tests on PostgreSQL 17 with the migrations in `db/migration-postgresql`, as staging does. Production's deploy doesn't wait for it | About 2 min |
+| `build` | Every pull request, and every merge to `main` | Builds the Docker image; on `main` it also pushes it to GHCR, tagged with the commit SHA | About 3 min |
+| `deploy-staging` | Merges to `main`, after `test-postgres` and `build` pass | Calls Render's deploy hook with the commit SHA. Render then builds and deploys that commit to staging | A few seconds, then 3 to 6 min on Render |
+| `deploy` | Merges to `main`, after `build` passes and a reviewer approves | Deploys the image to Azure Container Apps and waits until `/health` shows the new commit | 2 to 4 min |
 
-A red job stops everything after it, so a failing test never reaches production. Staging isn't deployed by this workflow: Render watches `develop` and deploys a commit only once all its checks pass, so a failing test never reaches staging either. Click the failed job to read its log, fix the problem and push to the same branch again.
+A red job stops everything after it, so a failing test never reaches staging or production. Click the failed job to read its log, fix the problem and push to the same branch again.
 
 A failed `deploy` is usually an Azure problem rather than your code: send the run's link to the team's DevOps engineer.
 
@@ -183,6 +186,11 @@ The pipeline's secrets (`AZURE_*`, `DATABASE_URL`, `GHCR_PAT`, `JWT_PRIVATE_KEY`
 `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` hold the PEM text of the key pair production signs login tokens with (the deploy passes them to the app as Container App secrets). Create it once with the `openssl` commands from "Get set up", paste each file's full contents into its secret, and keep the private key nowhere else. Rotating the pair logs every user out, so do it between semesters.
 
 Staging has its own settings, kept in Render on the `unicloud-portal-staging` service's **Environment** page: its `DATABASE_URL` (Render's PostgreSQL database), `SPRING_FLYWAY_LOCATIONS=classpath:db/migration-postgresql`, and its own key pair in `APP_JWT_PRIVATE_KEY` and `APP_JWT_PUBLIC_KEY`. Never reuse production's values there.
+
+How the deploys are set up (DevOps, once):
+
+- **Staging:** the Render service builds from `main`, with **Auto-Deploy** off. The service's **Deploy Hook** URL (Render, **Settings**) is stored as the `RENDER_DEPLOY_HOOK` secret of the `staging` environment (GitHub, **Settings → Environments**). Anyone with the URL can deploy, so treat it like a password. Without the secret, `deploy-staging` only prints a warning.
+- **Production:** the `production` environment (GitHub, **Settings → Environments**) lists DevOps under **Required reviewers**. Without reviewers, `deploy` runs as soon as `build` passes, with no approval.
 
 ## Changing the database
 
@@ -241,7 +249,7 @@ To change it:
 2. Add its PostgreSQL copy, with the same file name, in `src/main/resources/db/migration-postgresql`. The header of `V1__init_schema.sql` there shows how the MySQL types map.
 3. Never edit a migration that has already run anywhere, `V1` included. Flyway keeps a checksum of every file and refuses to start if one changes.
 4. Run `./mvnw verify`. Flyway applies your new file to the local MySQL first, so SQL errors show up immediately.
-5. Open a pull request as usual. The pipeline applies every migration to a fresh MySQL 8.4 (`test`) and every PostgreSQL copy to a fresh PostgreSQL 17 (`test-postgres`). After the merge, staging applies the new ones to its database, and the next release applies them to production's.
+5. Open a pull request as usual. The pipeline applies every migration to a fresh MySQL 8.4 (`test`) and every PostgreSQL copy to a fresh PostgreSQL 17 (`test-postgres`). After the merge, staging applies the new ones to its database, and the next approved deploy applies them to production's.
 
 Keep each change backwards-compatible, because old and new replicas run side by side for a minute during every deploy. To rename or remove a column, add the new column in one release, switch the code over, and drop the old column in a later release.
 
@@ -310,7 +318,7 @@ Check with DevOps before running it against production. Each run spends the data
 
 | Problem | Fix |
 | --- | --- |
-| Push rejected because `develop` or `main` is a protected branch | Push to a branch and open a pull request |
+| Push rejected because `main` is a protected branch | Push to a branch and open a pull request |
 | `test` fails with a Flyway or SQL error | Your migration doesn't run on MySQL 8.4. Reproduce it with `./mvnw verify` against the local MySQL |
 | `test` fails with `Schema-validation: missing column` or `missing table` | An entity doesn't match the tables. Add a migration or fix the entity |
 | App won't start: `Migration checksum mismatch` | An applied migration was edited. Undo the edit and put the change in a new `V...` file |
@@ -320,4 +328,5 @@ Check with DevOps before running it against production. Each run spends the data
 | `deploy` fails | Usually Azure, not your code. Send the run's link to DevOps |
 | Staging takes a minute or more to load | It was asleep: the free service sleeps after 15 minutes without visitors. Wait a minute and reload |
 | `test-postgres` fails but `test` passes | The PostgreSQL copy of a migration is missing or different. Fix it in `db/migration-postgresql` |
-| Your change isn't on staging a few minutes after the merge | Render deploys only once every check passes on `develop`. Check the run in the **Actions** tab, then ask DevOps |
+| Your change isn't on staging a few minutes after the merge | Open the run in the **Actions** tab. A red job stopped it. A yellow warning on `deploy-staging` means the `RENDER_DEPLOY_HOOK` secret is missing. Otherwise check the deploy's log in Render, then ask DevOps |
+| The `deploy` job shows **Cancelled** | A newer merge replaced it while it waited for approval. Approve the newest run instead |
