@@ -1,0 +1,62 @@
+# Render Blueprint: the portal's staging, with its own PostgreSQL, on Render's free plans.
+# In Render: New > Blueprint, pick this repository. Render asks once for the two values marked
+# "sync: false" (the token signing key pair, as PEM text; see the README's "Get set up" for the
+# openssl commands). Everything else is wired up here.
+#
+# Free PostgreSQL databases expire after 30 days. Delete the database in Render and sync the
+# Blueprint again; Flyway rebuilds the tables and the test data at the next start.
+
+databases:
+  - name: unicloud-portal-staging-db
+    databaseName: unicloud
+    user: unicloud
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "17"
+
+services:
+  - type: web
+    name: unicloud-portal-staging
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      # Staging: any SSO callback URL, and the staging tools at /staging (docs/sso.md)
+      - key: SPRING_PROFILES_ACTIVE
+        value: staging
+      - key: SPRING_FLYWAY_LOCATIONS
+        value: classpath:db/migration-postgresql
+      # The database's parts, from Render; the app puts them together into a JDBC address
+      # (Spring fills in the ${...} placeholders at startup)
+      - key: PGHOST
+        fromDatabase:
+          name: unicloud-portal-staging-db
+          property: host
+      - key: PGPORT
+        fromDatabase:
+          name: unicloud-portal-staging-db
+          property: port
+      - key: PGDATABASE
+        fromDatabase:
+          name: unicloud-portal-staging-db
+          property: database
+      - key: PGUSER
+        fromDatabase:
+          name: unicloud-portal-staging-db
+          property: user
+      - key: PGPASSWORD
+        fromDatabase:
+          name: unicloud-portal-staging-db
+          property: password
+      - key: DATABASE_URL
+        value: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}?user=${PGUSER}&password=${PGPASSWORD}
+      # The issuer of SSO tokens: the service's own https address, which Render sets
+      - key: APP_SSO_ISSUER
+        value: ${RENDER_EXTERNAL_URL}
+      # Staging's own token signing key pair (PEM text). Never production's.
+      - key: APP_JWT_PRIVATE_KEY
+        sync: false
+      - key: APP_JWT_PUBLIC_KEY
+        sync: false
