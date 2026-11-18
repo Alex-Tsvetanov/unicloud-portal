@@ -4,6 +4,8 @@ The other UniCloud modules log users in through the portal. A user signs in once
 
 The portal is a standard **OpenID Connect** provider. It uses the **OAuth 2.0 authorization code flow with PKCE**. Every module can use an existing OIDC client library in its own language. Nothing here is specific to UniCloud except the user claims.
 
+**Module teams:** sections 1 to 10 are for you. Start with [Testing a module against staging](#testing-a-module-against-staging) to log in from your own machine today. Sections 11 to 13 are for the portal team.
+
 ## Contents
 
 1. [The rules in short](#the-rules-in-short)
@@ -14,9 +16,11 @@ The portal is a standard **OpenID Connect** provider. It uses the **OAuth 2.0 au
 6. [User claims](#user-claims)
 7. [Logout](#logout)
 8. [Testing a module against staging](#testing-a-module-against-staging)
-9. [Registering a module (portal admins)](#registering-a-module-portal-admins)
-10. [How the portal does it](#how-the-portal-does-it)
-11. [Not done yet](#not-done-yet)
+9. [Going to production](#going-to-production)
+10. [Troubleshooting](#troubleshooting)
+11. [Registering a module (portal admins)](#registering-a-module-portal-admins)
+12. [How the portal does it](#how-the-portal-does-it)
+13. [Not done yet](#not-done-yet)
 
 ## The rules in short
 
@@ -275,6 +279,51 @@ curl -X POST <staging>/api/v1/staging/users -H 'Content-Type: application/json' 
 ```
 
 **Keep in mind.** Everything on staging is shared: every team sees and can change every user. Use made-up people and passwords. Production has none of this: there the routes do not exist, and callbacks follow the host list.
+
+**Roles and their default permissions.** `GET /api/v1/staging/roles` always has the current list.
+
+| Role | Default permissions |
+|---|---|
+| `STUDENT` | `STUDENT_PROFILE_READ_OWN`, `COURSE_OFFERING_READ`, `ENROLLMENT_REQUEST_CREATE` |
+| `TEACHER` | `COURSE_OFFERING_READ`, `STUDENT_PROFILE_READ_ENROLLED`, `ENROLLMENT_REQUEST_ACCEPT_REJECT` |
+| `INSPECTOR` | `STUDENT_CREATE`, `STUDENT_PROFILE_READ_ANY`, `COURSE_CREATE_MODIFY`, `COURSE_OFFERING_READ`, `COURSE_OFFERING_CREATE_MODIFY` |
+| `ADMIN` | `STAFF_CREATE` |
+
+On staging any user can have any mix of the ten permissions, whatever the role. A token carries the permissions the user had when it was issued, so log in again after changing them.
+
+## Going to production
+
+Production is strict. Before your module goes live, send the portal team:
+
+- the client id you want (lower-case letters, digits, dashes; `unicloud-api` is reserved),
+- every callback URL, written out in full, each `https`,
+- every URL the user should land on after a logout everywhere, if you use it (see [Logout](#logout)),
+- the host names of those URLs, for example `library.tu-sofia.bg`.
+
+The portal team adds your host to production's allowed list (`sso-callback-hosts.properties`, released with the portal's next deploy), registers your module, and sends you the client id and secret over a private channel.
+
+| | Staging | Production |
+|---|---|---|
+| Callback URLs | Any `http` or `https` URL, registered or not | Only the registered URLs, matched exactly, `https`, on an allowed host |
+| Who registers your module | You, on the staging page | The portal team |
+| Test users | You make them on the staging page | Real accounts only |
+
+Configure each environment separately: the issuer, client id and secret all differ.
+
+## Troubleshooting
+
+| What you see | Likely cause and fix |
+|---|---|
+| A plain 400 page at the portal, no redirect back | The callback URL is not allowed (production), or the client id is unknown. Check both against your registration |
+| The callback gets `error=invalid_request` | PKCE is missing. Send `code_challenge` and `code_challenge_method=S256` |
+| The callback gets `error=invalid_scope` | A scope your module may not use. Allowed: `openid profile email unicloud` |
+| The token request answers `invalid_client` (401) | Wrong client id or secret, or the secret is not sent with HTTP Basic |
+| The token request answers `invalid_grant` (400) | The code expired (60 seconds) or was used already, or `redirect_uri` or `code_verifier` differs from the login |
+| Your library rejects the ID token on `iss` | The configured issuer is not exactly the portal's address. Copy it from the discovery document |
+| `/userinfo` answers 401 | Send the access token from the code exchange, not the ID token. It expires after 30 minutes |
+| The user lands on the portal's profile page instead of your module | The login took too long and the portal forgot the waiting request. Start the login from your module again |
+| A request to staging takes very long, or times out | Staging runs on Render's free plan, which stops the service after 15 minutes without requests. The next request starts it again, and the portal takes 1 to 3 minutes to boot. Until then requests wait, and some time out. That includes your backend's calls to `/oauth2/token`, `/oauth2/jwks` and the discovery document, not just the browser. Open the staging address in a browser first, wait until it answers, then retry. If your OIDC library gives up during the boot, raise its timeout for staging or retry the request |
+| Staging no longer knows your module (a plain 400 page) or your test users | Staging's free database is replaced every 30 days, and everything in it is lost: modules, secrets and users. Register your module and create your users again on the staging page |
 
 ## Registering a module (portal admins)
 
