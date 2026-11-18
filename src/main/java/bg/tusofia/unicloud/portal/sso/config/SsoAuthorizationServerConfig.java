@@ -73,9 +73,6 @@ public class SsoAuthorizationServerConfig {
      */
     public static final String SESSION_COOKIE = "__Host-UNICLOUD_SSO";
 
-    /** The cookie's name when app.sso.cookie-secure=false (local mock only): no prefix without Secure. */
-    public static final String INSECURE_SESSION_COOKIE = "UNICLOUD_SSO";
-
     /** The only SSO endpoint that takes a Bearer token: a module's access token. */
     private static final String USERINFO_PATH = "/userinfo";
 
@@ -145,12 +142,12 @@ public class SsoAuthorizationServerConfig {
      * requests other sites make in the background.
      */
     @Bean
-    CookieSerializer ssoSessionCookie(@Value("${app.sso.cookie-secure}") boolean secure) {
+    CookieSerializer ssoSessionCookie() {
         DefaultCookieSerializer cookie = new DefaultCookieSerializer();
-        cookie.setCookieName(secure ? SESSION_COOKIE : INSECURE_SESSION_COOKIE);
+        cookie.setCookieName(SESSION_COOKIE);
         cookie.setCookiePath("/");
         cookie.setUseHttpOnlyCookie(true);
-        cookie.setUseSecureCookie(secure);
+        cookie.setUseSecureCookie(true);
         cookie.setSameSite("Lax");
         return cookie;
     }

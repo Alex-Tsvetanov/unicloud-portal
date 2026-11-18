@@ -13,7 +13,7 @@ The portal is a standard **OpenID Connect** provider. It uses the **OAuth 2.0 au
 5. [What a module must build](#what-a-module-must-build)
 6. [User claims](#user-claims)
 7. [Logout](#logout)
-8. [Testing a module locally](#testing-a-module-locally)
+8. [Testing a module against staging](#testing-a-module-against-staging)
 9. [Registering a module (portal admins)](#registering-a-module-portal-admins)
 10. [How the portal does it](#how-the-portal-does-it)
 11. [Not done yet](#not-done-yet)
@@ -21,7 +21,7 @@ The portal is a standard **OpenID Connect** provider. It uses the **OAuth 2.0 au
 ## The rules in short
 
 - A module sends the browser to the portal's `/oauth2/authorize` with a `redirect_uri` (the "callback"). The portal sends the user back to it after login.
-- In production every callback URL is registered in advance, on a host the portal allows. The portal refuses any other URL and does not redirect to it. A matching host or prefix is not enough: the whole URL must match, character for character. Staging and the local mock accept any callback (see [Callback URLs per environment](#callback-urls-per-environment)).
+- In production every callback URL is registered in advance, on a host the portal allows. The portal refuses any other URL and does not redirect to it. A matching host or prefix is not enough: the whole URL must match, character for character. Staging accepts any callback (see [Callback URLs per environment](#callback-urls-per-environment)).
 - The callback **never** receives user data or a token. It receives a short-lived, single-use `code`.
 - The module's backend exchanges that code for the user's identity by calling the portal directly, server to server.
 
@@ -34,8 +34,7 @@ The callbacks are the `redirect_uri` of a login and the `post_logout_redirect_ur
 | Environment | Which callbacks work | Set by |
 |---|---|---|
 | **Production** | Only URLs registered for the module, matched exactly, `https`, on a host listed in [`sso-callback-hosts.properties`](../src/main/resources/sso-callback-hosts.properties) | The default (`app.sso.callback-policy=allowlist`) |
-| **Staging** | Any absolute `http` or `https` URL, registered or not | `APP_SSO_CALLBACK_POLICY=any` in Render |
-| **Local mock** | Any absolute `http` or `https` URL, registered or not | The `mock` profile (see [Testing a module locally](#testing-a-module-locally)) |
+| **Staging** | Any absolute `http` or `https` URL, registered or not, including `http://localhost` on a developer's machine | The `staging` profile (`SPRING_PROFILES_ACTIVE=staging` in Render) |
 
 **The production host list.** `src/main/resources/sso-callback-hosts.properties` holds one comma-separated list. An entry is an exact host (`library.tu-sofia.bg`) or every subdomain of a domain (`*.tu-sofia.bg`, which does not include `tu-sofia.bg` itself). Change it with a pull request.
 - A module can register in production only once its host is on the list.
@@ -43,7 +42,7 @@ The callbacks are the `redirect_uri` of a login and the `post_logout_redirect_ur
 - In an emergency, the variable `APP_SSO_ALLOWED_CALLBACK_HOSTS` overrides the whole list without a release.
 - The list is empty today, because no module is live yet.
 
-Even staging and the mock accept only `http` and `https` URLs. A `javascript:` or relative URL is refused everywhere.
+Even staging accepts only `http` and `https` URLs. A `javascript:` or relative URL is refused everywhere.
 
 ## The flow
 
@@ -231,49 +230,51 @@ Logging out of the portal itself (the "Изход" button) also ends the SSO ses
 
 Not done: single logout, where logging out of one module also ends the user's session in every other module.
 
-## Testing a module locally
+## Testing a module against staging
 
-Module developers run the portal on their own machine as a single sign-on mock. It is the real portal image with the `mock` profile. It has the same login page, endpoints and tokens as production, and it comes ready to use:
+A module team tests its own changes on its own machine against the portal's **staging** deployment. No local copy of the portal is needed. Staging has two things production does not:
 
-- **Client id** `local-module`, **client secret** `local-secret`.
-- **Any callback URL** works, registered or not, for login and logout.
-- **Test users**, all with the password `password`:
+- **Any callback URL works**, so the portal can send the browser back to `http://localhost:3000/...` on a developer's machine. The module's backend calls staging's `/oauth2/token` over the internet as usual.
+- **Staging tools**, with no login needed: a page at `<staging>/staging` and the same actions as an API. With them a team makes its own test users, with exactly the role and permissions it needs, and registers its module.
 
-| Email | Role |
-|---|---|
-| `student1@student.tu-sofia.bg` to `student5@student.tu-sofia.bg` | Student (`student4` is `INTERRUPTED`) |
-| `ivan.petrov@tu-sofia.bg`, `maria.ivanova@tu-sofia.bg`, `georgi.dimitrov@tu-sofia.bg` | Teacher |
-| `admin@tu-sofia.bg` | Admin |
+**Step by step:**
 
-You need Docker. Take [`mock/docker-compose.yml`](../mock/docker-compose.yml) from this repository and run:
-
-```bash
-docker compose -f docker-compose.yml up -d
-```
-
-The portal is then at `http://localhost:8080`. Point the module's OIDC library at:
+1. Open `<staging>/staging`.
+2. Under **Register your module for single sign-on**, pick a client id (for example `module-x`) and register. Copy the secret: it is shown once. Register again under a new id if it is lost.
+3. Under **Create a test user**, pick a role. Its default permissions are ticked. Tick or untick any permission, and add a student record if the module needs one. Choose the password yourself.
+4. Point the module's OIDC library at staging:
 
 | Setting | Value |
 |---|---|
-| Issuer / discovery | `http://localhost:8080` (`/.well-known/openid-configuration`) |
-| Client id | `local-module` |
-| Client secret | `local-secret` |
+| Issuer / discovery | `<staging>` (`/.well-known/openid-configuration`) |
+| Client id and secret | From step 2 |
 | Client authentication | `client_secret_basic` |
+| Callback | Anything, for example `http://localhost:3000/auth/callback` |
 | Scopes | `openid profile email unicloud` |
 | PKCE | `S256` (required) |
 
-Stop it with `docker compose -f docker-compose.yml down`. Add `-v` to also delete its database and keys.
+5. Log in through the module with the user from step 3. To test other permissions, use **Edit permissions** in the users table, then log in again. Tokens are issued with the permissions of that moment.
 
-**Settings.** Set these as environment variables or in a `.env` file next to the compose file:
-- `PORTAL_PORT` moves the mock off port 8080. The issuer moves with it, for example `http://localhost:9000`.
-- `MOCK_CLIENT_ID`, `MOCK_CLIENT_SECRET` and `MOCK_USER_PASSWORD` change the defaults.
-- `PORTAL_IMAGE` picks another portal build.
+Staging's free hosting sleeps after 15 minutes without visitors, so the first request after a pause can take 1 to 3 minutes.
 
-**The image.** By default the compose file runs `ghcr.io/rata5/unicloud-portal:latest`, which the pipeline publishes on every release to production. So the mock always behaves like production, apart from the callback rule. To try unreleased portal changes, build the image from this repository (`docker build -t unicloud-portal .`) and run with `PORTAL_IMAGE=unicloud-portal`.
+**The API.** The staging tools need no login and exist only on staging:
 
-**A module that runs in Docker too.** Tokens name `http://localhost:8080` as their issuer, because that is the address the browser uses. Inside a container, `localhost` is the container itself. So let the module's backend reach the portal at `http://host.docker.internal:8080`, but keep `http://localhost:8080` as the expected issuer. Most OIDC libraries let you set the issuer and the endpoint addresses apart.
+| Request | What it does |
+|---|---|
+| `GET /api/v1/staging/roles` | Every permission, and each role's defaults |
+| `GET /api/v1/staging/users` | Every user, with role and permissions (never passwords) |
+| `POST /api/v1/staging/users` | Creates a user. Body: `email`, `password` (8 or more characters), `firstName`, `lastName`, `role`, and optionally `permissions` (a list of names: left out means the role's defaults, `[]` means none) and `student` (`facultyNumber`, `specialty`, `studyYear`, `status`) |
+| `PUT /api/v1/staging/users/{id}/permissions` | Replaces the user's permissions. Body: `{"permissions": [...]}` |
+| `POST /api/v1/staging/sso-clients` | Registers a module, like the admin route in the next section. Returns the secret once |
 
-**What is different from production.** Any callback is accepted. Every user has the same password. The session cookie is called `UNICLOUD_SSO` and has no `Secure` flag, so it works on plain `http://localhost` in every browser. Never run the `mock` profile on a real server.
+```bash
+curl -X POST <staging>/api/v1/staging/users -H 'Content-Type: application/json' -d '{
+  "email": "x.teacher@test.tu-sofia.bg", "password": "a-long-password",
+  "firstName": "Test", "lastName": "Teacher", "role": "TEACHER",
+  "permissions": ["COURSE_OFFERING_READ", "STUDENT_PROFILE_READ_ANY"]}'
+```
+
+**Keep in mind.** Everything on staging is shared: every team sees and can change every user. Use made-up people and passwords. Production has none of this: there the routes do not exist, and callbacks follow the host list.
 
 ## Registering a module (portal admins)
 
@@ -306,7 +307,7 @@ Response `201`:
 - **The secret is shown once.** The portal stores only its BCrypt hash. Send it to the module team over a private channel.
 - `clientId`: 2 to 63 lower-case letters, digits or dashes. Registering the same one twice answers `409`. `unicloud-api` is reserved: it is the audience of the portal's own tokens.
 - Every URL must follow the environment's rule (see [Callback URLs per environment](#callback-urls-per-environment)). In production that means `https` on a listed host; the answer is `400` otherwise. Everywhere: no fragments, user info, `*` or `,`.
-- Module teams do not need a registration to develop: they use the [local mock](#testing-a-module-locally).
+- Module teams do not need an admin to develop: on staging they register themselves (see [Testing a module against staging](#testing-a-module-against-staging)).
 - Only the `ADMIN` role may register. Anyone else gets `403`. Every registration is logged with the admin's user id.
 - A module may ask for the scopes `openid`, `profile`, `email` and `unicloud`.
 
@@ -319,13 +320,13 @@ For the portal team.
 - **Getting from a Bearer login to the session.** A browser without a session lands on `/login.html?sso=1`. After the normal login, the page calls `POST /api/v1/auth/sso-session` with its Bearer token (`sso/controller/SsoSessionController.java`). That creates the session with a new id and returns the saved `/oauth2/authorize` path, and the page opens it. The endpoint needs the Bearer header, so another site cannot trigger it with the user's cookie. It only ever returns an `/oauth2/authorize` path, so it cannot become an open redirect. If the user is already logged in to the portal, the page does this without asking for the password.
 - **The API stays stateless.** The API chain never reads the session, so the cookie cannot authenticate `/api/v1/...` calls. Portal tokens have `aud=unicloud-api`; module tokens have `aud=<client_id>` and the portal's URL as `iss`. Each side refuses the other's. In the SSO chain only `/userinfo` reads a Bearer token; `/oauth2/authorize` answers only to the SSO session.
 - **Callback rule.** `SsoCallbackPolicy` holds the rule (`app.sso.callback-policy`, the host list). `SsoCallbackValidators` applies it to `/oauth2/authorize` and `/connect/logout`. In `any` mode it adds the request's callback to a copy of the module's registration for the library's check only, so the library's other checks (PKCE, scopes) still run. Nothing is saved.
-- **The local mock.** The `mock` profile (`application-mock.properties`) and `sso/mock/MockSsoSeeder.java`, which sets the known password and registers the known client at every start. The pipeline pushes the image as `:latest` on every release to production, next to the commit's own tag.
+- **Staging tools.** The `staging` profile (`application-staging.properties`) sets the callback rule to `any` and turns on `staging/StagingToolsController.java` (routes and page) with `StagingUserService.java`. Without the profile the routes are never created, and `SecurityConfig` refuses `/staging` and `/api/v1/staging/**` to everyone, admins included. The page is `src/main/resources/staging/index.html`, served by the controller, not as a public static file.
 - **Storage.** Flyway migration `V4__sso.sql` (and its PostgreSQL copy) adds the tables: `oauth2_registered_client`, `oauth2_authorization`, `oauth2_authorization_consent`, `SPRING_SESSION` and `SPRING_SESSION_ATTRIBUTES`. `SsoAuthorizationCleanup` deletes logins older than a day, every hour.
 - **Single-use codes across replicas.** `SingleUseCodeAuthorizationService` adds a conditional `UPDATE` on `code_redeemed`, so only one exchange of a code can save its tokens. The losing exchange also revokes the winner's tokens.
 - **Keys.** The same RSA key pair as the portal's own tokens, published with its RFC 7638 thumbprint as `kid`.
 - **Issuer.** Production sets `APP_SSO_ISSUER` to `https://<the app's address>` on every deploy. Elsewhere the portal works it out from the request, using `X-Forwarded-Proto` from the proxy, and logs a warning at startup. On staging, set `APP_SSO_ISSUER` in Render to staging's `https` address, so the issuer never depends on the proxy.
 - **Time zones.** The library stores token times as `TIMESTAMP`. The MySQL connection uses `preserveInstants=true`, `connectionTimeZone=UTC` and `forceConnectionTimeZoneToSession=true` so they stay exact.
-- **Tests.** `sso/SsoFlowTests.java` runs the whole flow as a module would, through the real filters and database. `sso/SsoAuthorizationStoreTests.java` covers the single-use race and the cleanup. `sso/SsoSessionMaxAgeFilterTests.java` covers the 8-hour limit. `SsoCallbackPolicyTests`, `SsoAnyCallbackTests` and `SsoMockProfileTests` cover the callback rules and the mock.
+- **Tests.** `sso/SsoFlowTests.java` runs the whole flow as a module would, through the real filters and database. `sso/SsoAuthorizationStoreTests.java` covers the single-use race and the cleanup. `sso/SsoSessionMaxAgeFilterTests.java` covers the 8-hour limit. `SsoCallbackPolicyTests` and `SsoAnyCallbackTests` cover the callback rules. `staging/StagingToolsTests.java` and `StagingToolsAbsentTests.java` cover the staging tools, on and off.
 
 ## Not done yet
 

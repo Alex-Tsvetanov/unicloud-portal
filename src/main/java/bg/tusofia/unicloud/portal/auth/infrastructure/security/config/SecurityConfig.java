@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -51,7 +53,7 @@ public class SecurityConfig {
      */
     @Bean
     @Order(2)
-    SecurityFilterChain securityFilterChain(HttpSecurity http)
+    SecurityFilterChain securityFilterChain(HttpSecurity http, Environment environment)
             throws Exception {
 
         return http
@@ -89,6 +91,11 @@ public class SecurityConfig {
                                 HttpMethod.DELETE,
                                 "/api/v1/auth/sso-session"
                         ).permitAll()
+                        // Staging only: the staging tools need no login (StagingToolsController).
+                        // On any other profile the routes do not exist and stay closed.
+                        .requestMatchers("/staging", "/api/v1/staging/**")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                environment.matchesProfiles("staging")))
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth -> oauth

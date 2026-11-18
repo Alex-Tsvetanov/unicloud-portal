@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Staging tools · UniCloud Portal</title>
+    <link rel="stylesheet" href="/css/app.css">
+    <style>
+        .staging-banner { background: #fff4e5; color: #7a4100; border-bottom: 1px solid #f5c27a; padding: 10px 16px; text-align: center; font-size: .95rem; }
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+        @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+        .perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; margin: 8px 0 4px; }
+        .perms label { display: flex; gap: 8px; align-items: center; margin: 0; font-weight: normal; font-family: ui-monospace, monospace; font-size: .85rem; }
+        .perms input { width: auto; margin: 0; }
+        fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px 12px; margin: 16px 0 0; }
+        legend { color: var(--muted); padding: 0 6px; font-size: .9rem; }
+        textarea { width: 100%; min-height: 70px; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+        .secret { font-family: ui-monospace, monospace; background: var(--bg); padding: 10px 12px; border-radius: 8px; word-break: break-all; }
+        td.perm-cell { font-family: ui-monospace, monospace; font-size: .8rem; }
+        .row-actions button { font-size: .85rem; padding: 4px 10px; }
+        .edit-row td { background: var(--bg); }
+    </style>
+</head>
+<body>
+<div class="staging-banner"><strong>Staging only.</strong> Anything made here is visible to everyone who uses staging. Use made-up people and passwords.</div>
+
+<main class="card card-wide">
+    <h1>Staging tools</h1>
+    <p class="muted">Test users with any role and permissions, and single sign-on registration for your module. Guide: <code>docs/sso.md</code>, "Testing a module against staging".</p>
+
+    <h2>Create a test user</h2>
+    <form id="user-form" novalidate>
+        <div class="grid2">
+            <div><label for="email">Email</label><input id="email" type="email" required></div>
+            <div><label for="password">Password (8 or more characters)</label><input id="password" type="text" minlength="8" required></div>
+            <div><label for="first-name">First name</label><input id="first-name" required></div>
+            <div><label for="last-name">Last name</label><input id="last-name" required></div>
+            <div><label for="role">Role</label><select id="role"></select></div>
+        </div>
+        <fieldset>
+            <legend>Permissions (the role's defaults are ticked; change them freely)</legend>
+            <div id="perms" class="perms"></div>
+        </fieldset>
+        <fieldset id="student-fields">
+            <legend>Student record (optional, students only)</legend>
+            <div class="grid2">
+                <div><label for="faculty-number">Faculty number</label><input id="faculty-number"></div>
+                <div><label for="specialty">Specialty</label><input id="specialty"></div>
+                <div><label for="study-year">Study year (1 to 6)</label><input id="study-year" type="number" min="1" max="6"></div>
+                <div><label for="status">Status</label>
+                    <select id="status"><option>ACTIVE</option><option>INTERRUPTED</option><option>GRADUATED</option></select></div>
+            </div>
+        </fieldset>
+        <p id="user-message" class="message" role="status" hidden></p>
+        <button type="submit">Create user</button>
+    </form>
+
+    <h2>Users</h2>
+    <table>
+        <thead><tr><th>Id</th><th>Email</th><th>Role</th><th>Permissions</th><th></th></tr></thead>
+        <tbody id="users"></tbody>
+    </table>
+
+    <h2>Register your module for single sign-on</h2>
+    <form id="client-form" novalidate>
+        <div class="grid2">
+            <div><label for="client-id">Client id (lower-case letters, digits, dashes)</label><input id="client-id" required></div>
+            <div><label for="client-name">Name</label><input id="client-name" required></div>
+        </div>
+        <label for="redirects">Callback URLs, one per line (staging accepts any callback at login anyway)</label>
+        <textarea id="redirects">http://localhost:3000/auth/callback</textarea>
+        <p id="client-message" class="message" role="status" hidden></p>
+        <button type="submit">Register</button>
+    </form>
+</main>
+
+<script>
+(() => {
+    const $ = (id) => document.getElementById(id);
+    let roleDefaults = {};
+    let allPermissions = [];
+
+    async function call(method, url, body) {
+        const response = await fetch(url, {
+            method,
+            headers: body ? { 'Content-Type': 'application/json', Accept: 'application/json' } : { Accept: 'application/json' },
+            body: body ? JSON.stringify(body) : undefined,
+        });
+        const text = await response.text();
+        let data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { /* not JSON */ }
+        if (!response.ok) {
+            const fields = data && data.fieldErrors ? data.fieldErrors.map((f) => `${f.field}: ${f.message}`).join('; ') : '';
+            const reason = (data && (data.message || data.error)) || `Error ${response.status}`;
+            throw new Error(fields ? `${reason} (${fields})` : reason);
+        }
+        return data;
+    }
+
+    function show(element, text, ok) {
+        element.textContent = text;
+        element.className = 'message ' + (ok ? 'message-success' : 'message-error');
+        element.hidden = false;
+    }
+
+    function permissionBoxes(container, checked, prefix) {
+        container.replaceChildren();
+        for (const name of allPermissions) {
+            const label = document.createElement('label');
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.value = name;
+            box.checked = checked.includes(name);
+            box.id = prefix + name;
+            label.append(box, document.createTextNode(name));
+            container.append(label);
+        }
+    }
+
+    const ticked = (container) => [...container.querySelectorAll('input:checked')].map((b) => b.value);
+
+    function onRoleChange() {
+        const role = $('role').value;
+        permissionBoxes($('perms'), roleDefaults[role] || [], 'new-');
+        $('student-fields').hidden = role !== 'STUDENT';
+    }
+
+    function cell(text, className) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        if (className) td.className = className;
+        return td;
+    }
+
+    async function loadUsers() {
+        const users = await call('GET', '/api/v1/staging/users');
+        const body = $('users');
+        body.replaceChildren();
+        for (const user of users) {
+            const tr = document.createElement('tr');
+            const actions = document.createElement('td');
+            actions.className = 'row-actions';
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'btn-secondary';
+            edit.textContent = 'Edit permissions';
+            edit.addEventListener('click', () => openEditor(tr, user));
+            actions.append(edit);
+            tr.append(cell(user.id), cell(user.email + (user.student ? ' (student record)' : '')), cell(user.role),
+                cell(user.permissions.join(', ') || 'none', 'perm-cell'), actions);
+            body.append(tr);
+        }
+    }
+
+    function openEditor(row, user) {
+        if (row.nextElementSibling && row.nextElementSibling.classList.contains('edit-row')) {
+            row.nextElementSibling.remove();
+            return;
+        }
+        const editRow = document.createElement('tr');
+        editRow.className = 'edit-row';
+        const td = document.createElement('td');
+        td.colSpan = 5;
+        const boxes = document.createElement('div');
+        boxes.className = 'perms';
+        permissionBoxes(boxes, user.permissions, `u${user.id}-`);
+        const save = document.createElement('button');
+        save.type = 'button';
+        save.textContent = 'Save permissions';
+        const message = document.createElement('p');
+        message.hidden = true;
+        save.addEventListener('click', async () => {
+            try {
+                await call('PUT', `/api/v1/staging/users/${encodeURIComponent(user.id)}/permissions`, { permissions: ticked(boxes) });
+                await loadUsers();
+            } catch (e) {
+                show(message, e.message, false);
+            }
+        });
+        td.append(boxes, save, message);
+        editRow.append(td);
+        row.after(editRow);
+    }
+
+    $('role').addEventListener('change', onRoleChange);
+
+    $('user-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const role = $('role').value;
+        const request = {
+            email: $('email').value.trim(),
+            password: $('password').value,
+            firstName: $('first-name').value.trim(),
+            lastName: $('last-name').value.trim(),
+            role,
+            permissions: ticked($('perms')),
+        };
+        if (role === 'STUDENT' && $('faculty-number').value.trim()) {
+            request.student = {
+                facultyNumber: $('faculty-number').value.trim(),
+                specialty: $('specialty').value.trim(),
+                studyYear: Number($('study-year').value),
+                status: $('status').value,
+            };
+        }
+        try {
+            const user = await call('POST', '/api/v1/staging/users', request);
+            show($('user-message'), `Created ${user.email} (id ${user.id}). Log in with it on the portal or through your module.`, true);
+            $('user-form').reset();
+            onRoleChange();
+            await loadUsers();
+        } catch (e) {
+            show($('user-message'), e.message, false);
+        }
+    });
+
+    $('client-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const redirectUris = $('redirects').value.split('\n').map((s) => s.trim()).filter(Boolean);
+        try {
+            const client = await call('POST', '/api/v1/staging/sso-clients', {
+                clientId: $('client-id').value.trim(),
+                name: $('client-name').value.trim(),
+                redirectUris,
+            });
+            const message = $('client-message');
+            show(message, `Registered ${client.clientId}. Its secret, shown only now: `, true);
+            const secret = document.createElement('div');
+            secret.className = 'secret';
+            secret.textContent = client.clientSecret;
+            message.append(secret);
+        } catch (e) {
+            show($('client-message'), e.message, false);
+        }
+    });
+
+    (async () => {
+        try {
+            const roles = await call('GET', '/api/v1/staging/roles');
+            roleDefaults = roles.roleDefaults;
+            allPermissions = roles.permissions;
+            for (const role of Object.keys(roleDefaults)) {
+                const option = document.createElement('option');
+                option.value = role;
+                option.textContent = role;
+                $('role').append(option);
+            }
+            onRoleChange();
+            await loadUsers();
+        } catch (e) {
+            show($('user-message'), 'The staging tools are not available here: ' + e.message, false);
+        }
+    })();
+})();
+</script>
+</body>
+</html>
