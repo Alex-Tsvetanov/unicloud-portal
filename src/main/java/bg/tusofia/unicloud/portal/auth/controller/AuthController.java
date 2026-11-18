@@ -4,7 +4,6 @@ import bg.tusofia.unicloud.portal.auth.application.AccessToken;
 import bg.tusofia.unicloud.portal.auth.application.AuthenticationService;
 import bg.tusofia.unicloud.portal.auth.controller.dto.LoginRequest;
 import bg.tusofia.unicloud.portal.auth.controller.dto.LoginResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -23,8 +22,6 @@ public class AuthController {
         this.authenticationService = authenticationService;
     }
 
-    /** Public: no token needed (an empty security requirement overrides OpenApiConfig's default). */
-    @SecurityRequirements
     @PostMapping("/login")
     public LoginResponse login(
             @Valid @RequestBody LoginRequest request) {

@@ -46,13 +46,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
-		<!-- OpenAPI description at /v3/api-docs and Swagger UI at /swagger-ui.html.
-		     springdoc 3.x is the line for Spring Boot 4; 3.2.0 is built against Boot 4.1.2 -->
-		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>3.2.0</version>
-		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-mysql</artifactId>

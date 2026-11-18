@@ -72,15 +72,6 @@ public class SecurityConfig {
                                 "/js/**",
                                 "/favicon.ico"
                         ).permitAll()
-                        // The API description and Swagger UI (springdoc). They describe the API
-                        // but hold no data: "Try it out" still needs a token.
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/v3/api-docs",
-                                "/v3/api-docs/**",
-                                "/swagger-ui.html",
-                                "/swagger-ui/**"
-                        ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/auth/login"
