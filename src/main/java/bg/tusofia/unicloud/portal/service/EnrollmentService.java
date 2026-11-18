@@ -1,14 +1,10 @@
 package bg.tusofia.unicloud.portal.service;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.List;
 
-import javax.sql.DataSource;
-
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import bg.tusofia.unicloud.portal.dto.EnrollmentRequest;
@@ -29,38 +25,13 @@ public class EnrollmentService {
     private final EnrollmentRepository enrollmentRepository;
     private final StudentRepository studentRepository;
     private final CourseOfferingRepository offeringRepository;
-    private final JdbcTemplate jdbc;
-
-    // Production runs on MySQL, staging (Render) on PostgreSQL. MySQL needs the locking read
-    // (FOR SHARE) to see the latest committed enrollments. PostgreSQL refuses FOR SHARE with
-    // COUNT(*) and doesn't need it: under its default READ COMMITTED isolation each statement
-    // sees every transaction committed before it started, and the offering's row lock makes
-    // concurrent enrollments in the same course wait until this one commits.
-    private static final String COUNT_ENROLLED_MYSQL =
-            "SELECT COUNT(*) FROM enrollments WHERE offering_id = ? AND status = 'ENROLLED' FOR SHARE";
-    private static final String COUNT_ENROLLED_POSTGRESQL =
-            "SELECT COUNT(*) FROM enrollments WHERE offering_id = ? AND status = 'ENROLLED'";
-    private final String countEnrolledSql;
 
     public EnrollmentService(EnrollmentRepository enrollmentRepository,
                              StudentRepository studentRepository,
-                             CourseOfferingRepository offeringRepository,
-                             JdbcTemplate jdbc) {
+                             CourseOfferingRepository offeringRepository) {
         this.enrollmentRepository = enrollmentRepository;
         this.studentRepository = studentRepository;
         this.offeringRepository = offeringRepository;
-        this.jdbc = jdbc;
-        this.countEnrolledSql = isPostgreSql(jdbc.getDataSource())
-                ? COUNT_ENROLLED_POSTGRESQL
-                : COUNT_ENROLLED_MYSQL;
-    }
-
-    private static boolean isPostgreSql(DataSource dataSource) {
-        try (Connection connection = dataSource.getConnection()) {
-            return "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
-        } catch (SQLException e) {
-            throw new IllegalStateException("Could not tell which database the portal is using", e);
-        }
     }
 
     @Transactional(readOnly = true)
@@ -82,10 +53,19 @@ public class EnrollmentService {
     }
 
     /**
-     * Enroll a student in a course offering.
-     * Uses row-level locking to prevent overselling seats.
+     * Enroll a student in a course offering without overselling seats.
+     *
+     * <p>Two things keep the seat count right on every database, with the same code:
+     * <ul>
+     *   <li>The offering's row is locked first, so enrollments in the same offering run one
+     *       after another.</li>
+     *   <li>READ COMMITTED makes every statement see what other transactions committed before
+     *       it started. So the count below includes the enrollment of whoever held the lock
+     *       before us. PostgreSQL uses this level by default. MySQL defaults to REPEATABLE READ,
+     *       where the count could reuse a snapshot taken before the lock was granted.</li>
+     * </ul>
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public EnrollmentResponse enroll(EnrollmentRequest request) {
         Long studentId = request.studentId();
         Long offeringId = request.offeringId();
@@ -98,30 +78,18 @@ public class EnrollmentService {
             throw new EnrollmentException(ErrorCode.STUDENT_NOT_ACTIVE);
         }
 
-        // 2. Lock the offering row and check if open
-        Integer capacity = jdbc.query(
-                "SELECT capacity FROM course_offerings WHERE id = ? AND is_open = TRUE FOR UPDATE",
-                rs -> rs.next() ? rs.getInt(1) : null,
-                offeringId
-        );
+        // 2. Lock the offering row and check it is open
+        CourseOffering offering = offeringRepository.findByIdForUpdate(offeringId)
+                .orElseThrow(() -> new ResourceNotFoundException("CourseOffering", "id", offeringId));
 
-        if (capacity == null) {
-            // Check if offering exists but is closed, or doesn't exist at all
-            boolean exists = offeringRepository.existsById(offeringId);
-            if (!exists) {
-                throw new ResourceNotFoundException("CourseOffering", "id", offeringId);
-            }
+        if (!offering.isOpen()) {
             throw new EnrollmentException(ErrorCode.COURSE_CLOSED);
         }
 
-        // 3. Count enrolled students, seeing the latest committed data (see countEnrolledSql)
-        Integer enrolled = jdbc.queryForObject(
-                countEnrolledSql,
-                Integer.class,
-                offeringId
-        );
+        // 3. Count enrolled students, seeing every enrollment committed before the lock
+        int enrolled = enrollmentRepository.countEnrolledByOfferingId(offeringId);
 
-        if (enrolled >= capacity) {
+        if (enrolled >= offering.getCapacity()) {
             throw new EnrollmentException(ErrorCode.COURSE_FULL);
         }
 
@@ -140,12 +108,9 @@ public class EnrollmentService {
         }
 
         // 5. Create new enrollment
-        CourseOffering offering = offeringRepository.findById(offeringId)
-                .orElseThrow(() -> new ResourceNotFoundException("CourseOffering", "id", offeringId));
-
         Enrollment enrollment = new Enrollment(student, offering);
         try {
-            Enrollment saved = enrollmentRepository.save(enrollment);
+            Enrollment saved = enrollmentRepository.saveAndFlush(enrollment);
             return EnrollmentResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
             // Concurrent request already enrolled this student
@@ -155,9 +120,10 @@ public class EnrollmentService {
 
     /**
      * Cancel an enrollment.
-     * Uses row-level locking for consistency.
+     * Locks the offering's row, like {@link #enroll}, so a cancellation and an enrollment in the
+     * same offering never interleave.
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public EnrollmentResponse cancel(Long enrollmentId) {
         Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
                 .orElseThrow(() -> new EnrollmentException(ErrorCode.ENROLLMENT_NOT_FOUND));
@@ -166,12 +132,7 @@ public class EnrollmentService {
             throw new EnrollmentException(ErrorCode.ALREADY_CANCELLED);
         }
 
-        // Lock the offering row first for consistency
-        jdbc.query(
-                "SELECT id FROM course_offerings WHERE id = ? FOR UPDATE",
-                rs -> null,
-                enrollment.getOffering().getId()
-        );
+        offeringRepository.findByIdForUpdate(enrollment.getOffering().getId());
 
         enrollment.setStatus(Enrollment.Status.CANCELLED);
         Enrollment saved = enrollmentRepository.save(enrollment);
