@@ -1,0 +1,73 @@
+# The UniCloud portal as a local single sign-on mock, for developers of the other modules.
+# It is the real portal image with the "mock" profile: the same login page, endpoints and tokens
+# as production, with test users, one known client and any callback URL accepted.
+# Guide: docs/sso.md, "Testing a module locally".
+#
+#   docker compose -f docker-compose.yml up -d     then open http://localhost:8080/health
+#   docker compose -f docker-compose.yml down -v   stops it and deletes its data and keys
+#
+# Settings (environment variables or a .env file next to this file):
+#   PORTAL_IMAGE        the portal image (default: the latest production release)
+#   PORTAL_PORT         the port on this machine (default 8080)
+#   MOCK_CLIENT_ID      default local-module
+#   MOCK_CLIENT_SECRET  default local-secret
+#   MOCK_USER_PASSWORD  the password of every test user, default password
+name: unicloud-sso-mock
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: mock
+      POSTGRES_DB: unicloud
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d unicloud"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Makes the portal's token signing key pair once, into the "keys" volume
+  keys:
+    image: alpine:3.23
+    volumes:
+      - keys:/keys
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ ! -f /keys/private.pem ]; then
+          apk add --no-cache openssl > /dev/null
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /keys/private.pem
+          openssl pkey -in /keys/private.pem -pubout -out /keys/public.pem
+          chmod 644 /keys/private.pem /keys/public.pem
+        fi
+
+  portal:
+    image: ${PORTAL_IMAGE:-ghcr.io/rata5/unicloud-portal:latest}
+    depends_on:
+      db:
+        condition: service_healthy
+      keys:
+        condition: service_completed_successfully
+    ports:
+      - "${PORTAL_PORT:-8080}:8080"
+    volumes:
+      - keys:/keys:ro
+    environment:
+      SPRING_PROFILES_ACTIVE: mock
+      DATABASE_URL: jdbc:postgresql://db:5432/unicloud?user=postgres&password=mock
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration-postgresql
+      APP_JWT_PRIVATE_KEY: file:/keys/private.pem
+      APP_JWT_PUBLIC_KEY: file:/keys/public.pem
+      # Must be the address browsers and the module use, or token checks fail on "iss"
+      APP_SSO_ISSUER: http://localhost:${PORTAL_PORT:-8080}
+      MOCK_CLIENT_ID: ${MOCK_CLIENT_ID:-local-module}
+      MOCK_CLIENT_SECRET: ${MOCK_CLIENT_SECRET:-local-secret}
+      MOCK_USER_PASSWORD: ${MOCK_USER_PASSWORD:-password}
+
+volumes:
+  db:
+  keys:

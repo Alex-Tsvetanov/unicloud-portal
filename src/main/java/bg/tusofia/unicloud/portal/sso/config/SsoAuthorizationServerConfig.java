@@ -1,6 +1,8 @@
 package bg.tusofia.unicloud.portal.sso.config;
 
+import bg.tusofia.unicloud.portal.sso.application.SsoCallbackPolicy;
 import bg.tusofia.unicloud.portal.sso.application.SsoUserClaims;
+import bg.tusofia.unicloud.portal.sso.infrastructure.SsoCallbackValidators;
 import bg.tusofia.unicloud.portal.sso.infrastructure.SingleUseCodeAuthorizationService;
 import bg.tusofia.unicloud.portal.sso.infrastructure.SsoSessionMaxAgeFilter;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -24,8 +26,10 @@ import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeRequestAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcLogoutAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcUserInfoAuthenticationContext;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
@@ -69,6 +73,9 @@ public class SsoAuthorizationServerConfig {
      */
     public static final String SESSION_COOKIE = "__Host-UNICLOUD_SSO";
 
+    /** The cookie's name when app.sso.cookie-secure=false (local mock only): no prefix without Secure. */
+    public static final String INSECURE_SESSION_COOKIE = "UNICLOUD_SSO";
+
     /** The only SSO endpoint that takes a Bearer token: a module's access token. */
     private static final String USERINFO_PATH = "/userinfo";
 
@@ -80,13 +87,30 @@ public class SsoAuthorizationServerConfig {
             HttpSecurity http,
             JWKSource<SecurityContext> jwkSource,
             SsoUserClaims userClaims,
+            SsoCallbackPolicy callbackPolicy,
             @Value("${app.sso.session-max-age}") Duration sessionMaxAge) throws Exception {
 
         http
                 .oauth2AuthorizationServer(server -> {
                     http.securityMatcher(server.getEndpointsMatcher());
-                    server.oidc(oidc -> oidc.userInfoEndpoint(userInfo -> userInfo
-                            .userInfoMapper(context -> userInfo(context, userClaims))));
+                    // Callback URLs: the library's rules plus SsoCallbackPolicy (allowlist or any)
+                    server.authorizationEndpoint(endpoint -> endpoint.authenticationProviders(providers ->
+                            providers.forEach(provider -> {
+                                if (provider instanceof OAuth2AuthorizationCodeRequestAuthenticationProvider authorize) {
+                                    authorize.setAuthenticationValidator(
+                                            SsoCallbackValidators.authorization(callbackPolicy));
+                                }
+                            })));
+                    server.oidc(oidc -> oidc
+                            .userInfoEndpoint(userInfo -> userInfo
+                                    .userInfoMapper(context -> userInfo(context, userClaims)))
+                            .logoutEndpoint(logout -> logout.authenticationProviders(providers ->
+                                    providers.forEach(provider -> {
+                                        if (provider instanceof OidcLogoutAuthenticationProvider oidcLogout) {
+                                            oidcLogout.setAuthenticationValidator(
+                                                    SsoCallbackValidators.logout(callbackPolicy));
+                                        }
+                                    }))));
                 })
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
                 // A browser without a session goes to the login page; the request it came with is
@@ -121,12 +145,12 @@ public class SsoAuthorizationServerConfig {
      * requests other sites make in the background.
      */
     @Bean
-    CookieSerializer ssoSessionCookie() {
+    CookieSerializer ssoSessionCookie(@Value("${app.sso.cookie-secure}") boolean secure) {
         DefaultCookieSerializer cookie = new DefaultCookieSerializer();
-        cookie.setCookieName(SESSION_COOKIE);
+        cookie.setCookieName(secure ? SESSION_COOKIE : INSECURE_SESSION_COOKIE);
         cookie.setCookiePath("/");
         cookie.setUseHttpOnlyCookie(true);
-        cookie.setUseSecureCookie(true);
+        cookie.setUseSecureCookie(secure);
         cookie.setSameSite("Lax");
         return cookie;
     }

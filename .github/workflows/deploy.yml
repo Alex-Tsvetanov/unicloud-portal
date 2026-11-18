@@ -109,6 +109,12 @@ jobs:
         run: |
           echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push "${{ steps.tag.outputs.image }}"
+          # "latest" is what the other modules' developers run as a local SSO mock
+          # (mock/docker-compose.yml). It always matches production.
+          LATEST="${{ steps.tag.outputs.image }}"
+          LATEST="${LATEST%:*}:latest"
+          docker tag "${{ steps.tag.outputs.image }}" "$LATEST"
+          docker push "$LATEST"
 
   deploy:
     needs: build

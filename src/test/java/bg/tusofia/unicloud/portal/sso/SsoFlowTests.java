@@ -13,6 +13,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -27,7 +32,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
@@ -48,7 +52,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Requests go through Spring Session's filter and the real security filter chains, so the SSO
  * session is stored in the database exactly as in production. Users come from V2__test_data.sql.
  */
-@SpringBootTest
+/*
+ * Production rules: callbacks must be registered and on an allowed host. The test modules live
+ * under *.example; localhost is listed only to test the http exception.
+ */
+@SpringBootTest(properties = "app.sso.allowed-callback-hosts=*.example,localhost")
 class SsoFlowTests {
 
     /** student1@student.tu-sofia.bg: an active student with faculty number 121219001. */
@@ -85,6 +93,9 @@ class SsoFlowTests {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private RegisteredClientRepository clientRepository;
 
     private MockMvc mockMvc;
 
@@ -256,6 +267,38 @@ class SsoFlowTests {
     }
 
     @Test
+    void callbackOnAHostNoLongerAllowedIsRefused() throws Exception {
+        // Registered back when its host was allowed; the host has since left the config file
+        String clientId = "module-" + shortId();
+        String redirectUri = "https://" + clientId + ".elsewhere.org/auth/callback";
+        clientRepository.save(RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId(clientId)
+                .clientSecret("{noop}" + UUID.randomUUID())
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri(redirectUri)
+                .scope("openid")
+                .clientSettings(ClientSettings.builder().requireProofKey(true).build())
+                .build());
+        Client client = new Client(clientId, "unused", redirectUri);
+
+        MvcResult result = mockMvc.perform(authorize(client, new Pkce(), "openid"))
+                .andExpect(status().isBadRequest())
+                .andReturn();
+        assertThat(result.getResponse().getRedirectedUrl()).isNull();
+    }
+
+    @Test
+    void callbackHostMustBeInTheConfigFile() throws Exception {
+        mockMvc.perform(post("/api/v1/sso/clients")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(ADMIN_ID, "ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clientJson("module-" + shortId(), "https://module.elsewhere.org/auth/callback")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("sso-callback-hosts")));
+    }
+
+    @Test
     void loginWithoutPkceIsRefused() throws Exception {
         Client client = registerClient();
         String withoutPkce = "/oauth2/authorize?response_type=code&scope=openid&state=" + STATE
@@ -416,31 +459,6 @@ class SsoFlowTests {
     // ---- helpers ----
 
     private record Client(String clientId, String secret, String redirectUri) {
-    }
-
-    /** A PKCE pair: the verifier the module keeps, the S256 challenge it sends. */
-    private record Pkce(String verifier, String challenge) {
-        Pkce() {
-            this(randomVerifier());
-        }
-
-        private Pkce(String verifier) {
-            this(verifier, s256(verifier));
-        }
-
-        private static String randomVerifier() {
-            return UUID.randomUUID() + "-" + UUID.randomUUID();
-        }
-
-        private static String s256(String verifier) {
-            try {
-                byte[] hash = MessageDigest.getInstance("SHA-256")
-                        .digest(verifier.getBytes(StandardCharsets.US_ASCII));
-                return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
-            } catch (Exception e) {
-                throw new IllegalStateException(e);
-            }
-        }
     }
 
     private Client registerClient() throws Exception {

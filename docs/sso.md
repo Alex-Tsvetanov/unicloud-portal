@@ -7,23 +7,43 @@ The portal is a standard **OpenID Connect** provider. It uses the **OAuth 2.0 au
 ## Contents
 
 1. [The rules in short](#the-rules-in-short)
-2. [The flow](#the-flow)
-3. [Endpoints](#endpoints)
-4. [What a module must build](#what-a-module-must-build)
-5. [User claims](#user-claims)
-6. [Logout](#logout)
-7. [Registering a module (portal admins)](#registering-a-module-portal-admins)
-8. [How the portal does it](#how-the-portal-does-it)
-9. [Not done yet](#not-done-yet)
+2. [Callback URLs per environment](#callback-urls-per-environment)
+3. [The flow](#the-flow)
+4. [Endpoints](#endpoints)
+5. [What a module must build](#what-a-module-must-build)
+6. [User claims](#user-claims)
+7. [Logout](#logout)
+8. [Testing a module locally](#testing-a-module-locally)
+9. [Registering a module (portal admins)](#registering-a-module-portal-admins)
+10. [How the portal does it](#how-the-portal-does-it)
+11. [Not done yet](#not-done-yet)
 
 ## The rules in short
 
 - A module sends the browser to the portal's `/oauth2/authorize` with a `redirect_uri` (the "callback"). The portal sends the user back to it after login.
-- Every callback URL is registered in advance. The portal refuses any other URL and does not redirect to it. A matching host or prefix is not enough: the whole URL must match, character for character.
+- In production every callback URL is registered in advance, on a host the portal allows. The portal refuses any other URL and does not redirect to it. A matching host or prefix is not enough: the whole URL must match, character for character. Staging and the local mock accept any callback (see [Callback URLs per environment](#callback-urls-per-environment)).
 - The callback **never** receives user data or a token. It receives a short-lived, single-use `code`.
 - The module's backend exchanges that code for the user's identity by calling the portal directly, server to server.
 
 Why: anything put in a redirect URL ends up in browser history, server logs and `Referer` headers. A callback URL that is not checked lets an attacker send a victim to the login page with their own callback and receive the victim's identity.
+
+## Callback URLs per environment
+
+The callbacks are the `redirect_uri` of a login and the `post_logout_redirect_uri` of a logout.
+
+| Environment | Which callbacks work | Set by |
+|---|---|---|
+| **Production** | Only URLs registered for the module, matched exactly, `https`, on a host listed in [`sso-callback-hosts.properties`](../src/main/resources/sso-callback-hosts.properties) | The default (`app.sso.callback-policy=allowlist`) |
+| **Staging** | Any absolute `http` or `https` URL, registered or not | `APP_SSO_CALLBACK_POLICY=any` in Render |
+| **Local mock** | Any absolute `http` or `https` URL, registered or not | The `mock` profile (see [Testing a module locally](#testing-a-module-locally)) |
+
+**The production host list.** `src/main/resources/sso-callback-hosts.properties` holds one comma-separated list. An entry is an exact host (`library.tu-sofia.bg`) or every subdomain of a domain (`*.tu-sofia.bg`, which does not include `tu-sofia.bg` itself). Change it with a pull request.
+- A module can register in production only once its host is on the list.
+- Taking a host off the list switches off the logins and logouts of every module that uses it, at the next deploy, even if the module stays registered.
+- In an emergency, the variable `APP_SSO_ALLOWED_CALLBACK_HOSTS` overrides the whole list without a release.
+- The list is empty today, because no module is live yet.
+
+Even staging and the mock accept only `http` and `https` URLs. A `javascript:` or relative URL is refused everywhere.
 
 ## The flow
 
@@ -211,6 +231,50 @@ Logging out of the portal itself (the "Изход" button) also ends the SSO ses
 
 Not done: single logout, where logging out of one module also ends the user's session in every other module.
 
+## Testing a module locally
+
+Module developers run the portal on their own machine as a single sign-on mock. It is the real portal image with the `mock` profile. It has the same login page, endpoints and tokens as production, and it comes ready to use:
+
+- **Client id** `local-module`, **client secret** `local-secret`.
+- **Any callback URL** works, registered or not, for login and logout.
+- **Test users**, all with the password `password`:
+
+| Email | Role |
+|---|---|
+| `student1@student.tu-sofia.bg` to `student5@student.tu-sofia.bg` | Student (`student4` is `INTERRUPTED`) |
+| `ivan.petrov@tu-sofia.bg`, `maria.ivanova@tu-sofia.bg`, `georgi.dimitrov@tu-sofia.bg` | Teacher |
+| `admin@tu-sofia.bg` | Admin |
+
+You need Docker. Take [`mock/docker-compose.yml`](../mock/docker-compose.yml) from this repository and run:
+
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
+The portal is then at `http://localhost:8080`. Point the module's OIDC library at:
+
+| Setting | Value |
+|---|---|
+| Issuer / discovery | `http://localhost:8080` (`/.well-known/openid-configuration`) |
+| Client id | `local-module` |
+| Client secret | `local-secret` |
+| Client authentication | `client_secret_basic` |
+| Scopes | `openid profile email unicloud` |
+| PKCE | `S256` (required) |
+
+Stop it with `docker compose -f docker-compose.yml down`. Add `-v` to also delete its database and keys.
+
+**Settings.** Set these as environment variables or in a `.env` file next to the compose file:
+- `PORTAL_PORT` moves the mock off port 8080. The issuer moves with it, for example `http://localhost:9000`.
+- `MOCK_CLIENT_ID`, `MOCK_CLIENT_SECRET` and `MOCK_USER_PASSWORD` change the defaults.
+- `PORTAL_IMAGE` picks another portal build.
+
+**The image.** By default the compose file runs `ghcr.io/rata5/unicloud-portal:latest`, which the pipeline publishes on every release to production. So the mock always behaves like production, apart from the callback rule. To try unreleased portal changes, build the image from this repository (`docker build -t unicloud-portal .`) and run with `PORTAL_IMAGE=unicloud-portal`.
+
+**A module that runs in Docker too.** Tokens name `http://localhost:8080` as their issuer, because that is the address the browser uses. Inside a container, `localhost` is the container itself. So let the module's backend reach the portal at `http://host.docker.internal:8080`, but keep `http://localhost:8080` as the expected issuer. Most OIDC libraries let you set the issuer and the endpoint addresses apart.
+
+**What is different from production.** Any callback is accepted. Every user has the same password. The session cookie is called `UNICLOUD_SSO` and has no `Secure` flag, so it works on plain `http://localhost` in every browser. Never run the `mock` profile on a real server.
+
 ## Registering a module (portal admins)
 
 A portal admin registers each module once:
@@ -223,8 +287,8 @@ Content-Type: application/json
 {
   "clientId": "library",
   "name": "University library",
-  "redirectUris": ["https://library.example/auth/callback", "http://localhost:3000/auth/callback"],
-  "postLogoutRedirectUris": ["https://library.example/logged-out"]
+  "redirectUris": ["https://library.tu-sofia.bg/auth/callback"],
+  "postLogoutRedirectUris": ["https://library.tu-sofia.bg/logged-out"]
 }
 ```
 
@@ -234,14 +298,15 @@ Response `201`:
 {
   "clientId": "library",
   "clientSecret": "<43 random characters>",
-  "redirectUris": ["https://library.example/auth/callback", "http://localhost:3000/auth/callback"],
-  "postLogoutRedirectUris": ["https://library.example/logged-out"]
+  "redirectUris": ["https://library.tu-sofia.bg/auth/callback"],
+  "postLogoutRedirectUris": ["https://library.tu-sofia.bg/logged-out"]
 }
 ```
 
 - **The secret is shown once.** The portal stores only its BCrypt hash. Send it to the module team over a private channel.
 - `clientId`: 2 to 63 lower-case letters, digits or dashes. Registering the same one twice answers `409`. `unicloud-api` is reserved: it is the audience of the portal's own tokens.
-- Every URL must be absolute `https`. Plain `http` is allowed only for `localhost`, `127.0.0.1` and `[::1]`, for development. No fragments, user info, `*` or `,`.
+- Every URL must follow the environment's rule (see [Callback URLs per environment](#callback-urls-per-environment)). In production that means `https` on a listed host; the answer is `400` otherwise. Everywhere: no fragments, user info, `*` or `,`.
+- Module teams do not need a registration to develop: they use the [local mock](#testing-a-module-locally).
 - Only the `ADMIN` role may register. Anyone else gets `403`. Every registration is logged with the admin's user id.
 - A module may ask for the scopes `openid`, `profile`, `email` and `unicloud`.
 
@@ -253,12 +318,14 @@ For the portal team.
 - **The SSO session.** `/oauth2/authorize` is a browser redirect and cannot carry the portal's Bearer token, which lives in the page's `sessionStorage`. So the SSO endpoints use a session cookie, `__Host-UNICLOUD_SSO` (`HttpOnly; Secure; SameSite=Lax`). It ends after 30 minutes idle, and `SsoSessionMaxAgeFilter` ends it 8 hours after the password (`app.sso.session-max-age`), so a browser left logged in on a shared lab PC does not stay logged in for good. Spring Session stores it in the database, so every replica sees it. The `__Host-` prefix stops a sibling subdomain from planting the cookie.
 - **Getting from a Bearer login to the session.** A browser without a session lands on `/login.html?sso=1`. After the normal login, the page calls `POST /api/v1/auth/sso-session` with its Bearer token (`sso/controller/SsoSessionController.java`). That creates the session with a new id and returns the saved `/oauth2/authorize` path, and the page opens it. The endpoint needs the Bearer header, so another site cannot trigger it with the user's cookie. It only ever returns an `/oauth2/authorize` path, so it cannot become an open redirect. If the user is already logged in to the portal, the page does this without asking for the password.
 - **The API stays stateless.** The API chain never reads the session, so the cookie cannot authenticate `/api/v1/...` calls. Portal tokens have `aud=unicloud-api`; module tokens have `aud=<client_id>` and the portal's URL as `iss`. Each side refuses the other's. In the SSO chain only `/userinfo` reads a Bearer token; `/oauth2/authorize` answers only to the SSO session.
+- **Callback rule.** `SsoCallbackPolicy` holds the rule (`app.sso.callback-policy`, the host list). `SsoCallbackValidators` applies it to `/oauth2/authorize` and `/connect/logout`. In `any` mode it adds the request's callback to a copy of the module's registration for the library's check only, so the library's other checks (PKCE, scopes) still run. Nothing is saved.
+- **The local mock.** The `mock` profile (`application-mock.properties`) and `sso/mock/MockSsoSeeder.java`, which sets the known password and registers the known client at every start. The pipeline pushes the image as `:latest` on every release to production, next to the commit's own tag.
 - **Storage.** Flyway migration `V4__sso.sql` (and its PostgreSQL copy) adds the tables: `oauth2_registered_client`, `oauth2_authorization`, `oauth2_authorization_consent`, `SPRING_SESSION` and `SPRING_SESSION_ATTRIBUTES`. `SsoAuthorizationCleanup` deletes logins older than a day, every hour.
 - **Single-use codes across replicas.** `SingleUseCodeAuthorizationService` adds a conditional `UPDATE` on `code_redeemed`, so only one exchange of a code can save its tokens. The losing exchange also revokes the winner's tokens.
 - **Keys.** The same RSA key pair as the portal's own tokens, published with its RFC 7638 thumbprint as `kid`.
 - **Issuer.** Production sets `APP_SSO_ISSUER` to `https://<the app's address>` on every deploy. Elsewhere the portal works it out from the request, using `X-Forwarded-Proto` from the proxy, and logs a warning at startup. On staging, set `APP_SSO_ISSUER` in Render to staging's `https` address, so the issuer never depends on the proxy.
 - **Time zones.** The library stores token times as `TIMESTAMP`. The MySQL connection uses `preserveInstants=true`, `connectionTimeZone=UTC` and `forceConnectionTimeZoneToSession=true` so they stay exact.
-- **Tests.** `sso/SsoFlowTests.java` runs the whole flow as a module would, through the real filters and database. `sso/SsoAuthorizationStoreTests.java` covers the single-use race and the cleanup. `sso/SsoSessionMaxAgeFilterTests.java` covers the 8-hour limit.
+- **Tests.** `sso/SsoFlowTests.java` runs the whole flow as a module would, through the real filters and database. `sso/SsoAuthorizationStoreTests.java` covers the single-use race and the cleanup. `sso/SsoSessionMaxAgeFilterTests.java` covers the 8-hour limit. `SsoCallbackPolicyTests`, `SsoAnyCallbackTests` and `SsoMockProfileTests` cover the callback rules and the mock.
 
 ## Not done yet
 

@@ -16,19 +16,15 @@ import org.springframework.security.oauth2.server.authorization.settings.ClientS
 import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 /**
- * Registers a module as an SSO client with the rules of docs/sso.md: exact callback URLs over
- * https (plain http only for localhost), PKCE required, the client secret sent with HTTP Basic,
+ * Registers a module as an SSO client with the rules of docs/sso.md: callback URLs as
+ * {@link SsoCallbackPolicy} allows, PKCE required, the client secret sent with HTTP Basic,
  * no consent screen (every module is part of UniCloud) and no refresh tokens (a module keeps its
  * own session instead).
  */
@@ -38,12 +34,12 @@ public class SsoClientRegistrationService {
     /** The redirect_uris and post_logout_redirect_uris columns hold at most this many characters. */
     private static final int MAX_URI_LIST_LENGTH = 1000;
     private static final int SECRET_BYTES = 32;
-    private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "[::1]");
 
     private static final Logger log = LoggerFactory.getLogger(SsoClientRegistrationService.class);
 
     private final RegisteredClientRepository clientRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SsoCallbackPolicy callbackPolicy;
     private final Duration codeTimeToLive;
     private final Duration tokenTimeToLive;
     private final String apiAudience;
@@ -52,19 +48,28 @@ public class SsoClientRegistrationService {
     public SsoClientRegistrationService(
             RegisteredClientRepository clientRepository,
             PasswordEncoder passwordEncoder,
+            SsoCallbackPolicy callbackPolicy,
             @Value("${app.sso.code-ttl-seconds}") long codeTtlSeconds,
             @Value("${app.jwt.ttl-minutes}") long tokenTtlMinutes,
             @Value("${app.jwt.audience}") String apiAudience) {
 
         this.clientRepository = clientRepository;
         this.passwordEncoder = passwordEncoder;
+        this.callbackPolicy = callbackPolicy;
         this.codeTimeToLive = Duration.ofSeconds(codeTtlSeconds);
         this.tokenTimeToLive = Duration.ofMinutes(tokenTtlMinutes);
         this.apiAudience = apiAudience;
     }
 
-    /** {@code registeredBy}: the admin's user id, for the audit log. */
+    /** {@code registeredBy}: the admin's user id, for the audit log. The secret is random. */
     public RegisterSsoClientResponse register(RegisterSsoClientRequest request, String registeredBy) {
+        return register(request, registeredBy, newSecret());
+    }
+
+    /** As above with a chosen secret. Only the local mock uses this (MockSsoSeeder). */
+    public RegisterSsoClientResponse register(
+            RegisterSsoClientRequest request, String registeredBy, String secret) {
+
         // A module's tokens carry its client id as "aud". The portal API's own audience must
         // never be one, or the API's audience check would accept that module's tokens.
         if (request.clientId().equalsIgnoreCase(apiAudience)) {
@@ -78,7 +83,6 @@ public class SsoClientRegistrationService {
         List<String> logoutUris = checkedUris(
                 request.postLogoutRedirectUris() == null ? List.of() : request.postLogoutRedirectUris(),
                 "postLogoutRedirectUris");
-        String secret = newSecret();
 
         RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId(request.clientId())
@@ -108,43 +112,14 @@ public class SsoClientRegistrationService {
         return new RegisterSsoClientResponse(client.getClientId(), secret, redirectUris, logoutUris);
     }
 
-    private static List<String> checkedUris(List<String> uris, String field) {
+    private List<String> checkedUris(List<String> uris, String field) {
         List<String> checked = uris.stream().map(String::strip).distinct().toList();
-        checked.forEach(uri -> checkUri(uri, field));
+        checked.forEach(uri -> callbackPolicy.checkRegistration(uri, field));
         if (String.join(",", checked).length() > MAX_URI_LIST_LENGTH) {
             throw new IllegalArgumentException(
                     field + " must not be longer than " + MAX_URI_LIST_LENGTH + " characters in total");
         }
         return checked;
-    }
-
-    /**
-     * An absolute https URL (http only for localhost), with no fragment, no user info and no
-     * wildcard. The portal compares callbacks character for character, so a wildcard would only
-     * ever fail; refusing it early says so.
-     */
-    private static void checkUri(String value, String field) {
-        URI uri;
-        try {
-            uri = new URI(value);
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException(field + ": not a valid URL: " + value);
-        }
-
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
-        boolean secure = scheme.equals("https")
-                || (scheme.equals("http") && LOOPBACK_HOSTS.contains(host));
-
-        if (!uri.isAbsolute() || host.isEmpty() || !secure) {
-            throw new IllegalArgumentException(
-                    field + ": must be an https URL (http only for localhost): " + value);
-        }
-        if (uri.getRawFragment() != null || uri.getRawUserInfo() != null || value.contains("*")
-                || value.contains(",")) {
-            throw new IllegalArgumentException(
-                    field + ": must not contain a fragment, user info, '*' or ',': " + value);
-        }
     }
 
     private String newSecret() {
