@@ -1,11 +1,12 @@
-# Tests every pull request against MySQL 8.4. On main it also builds the image and deploys
-# it to Azure Container Apps.
+# Tests every pull request against MySQL 8.4 (production's database) and PostgreSQL 17
+# (staging's). On main it also builds the image and deploys it to Azure Container Apps.
+# On develop it only tests and builds: Render deploys staging from develop by itself.
 name: build-and-deploy
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 env:
   RESOURCE_GROUP: unicloud-rg           # must match setup-azure.sh
@@ -43,6 +44,42 @@ jobs:
           cache: maven
 
       - name: Test (Flyway applies the migrations to MySQL first)
+        run: |
+          chmod +x mvnw
+          ./mvnw -B verify
+
+  # Staging runs on PostgreSQL with the copies in db/migration-postgresql. This runs the same
+  # tests there. Production's deploy doesn't wait for it, so it can never hold up production.
+  test-postgres:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17               # the same version as staging on Render
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: unicloud
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/unicloud?user=postgres&password=test
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration-postgresql
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Test (Flyway applies the PostgreSQL migrations first)
         run: |
           chmod +x mvnw
           ./mvnw -B verify

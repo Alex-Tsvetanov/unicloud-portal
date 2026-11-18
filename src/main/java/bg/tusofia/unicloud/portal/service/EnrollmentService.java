@@ -1,6 +1,10 @@
 package bg.tusofia.unicloud.portal.service;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
+
+import javax.sql.DataSource;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,6 +31,17 @@ public class EnrollmentService {
     private final CourseOfferingRepository offeringRepository;
     private final JdbcTemplate jdbc;
 
+    // Production runs on MySQL, staging (Render) on PostgreSQL. MySQL needs the locking read
+    // (FOR SHARE) to see the latest committed enrollments. PostgreSQL refuses FOR SHARE with
+    // COUNT(*) and doesn't need it: under its default READ COMMITTED isolation each statement
+    // sees every transaction committed before it started, and the offering's row lock makes
+    // concurrent enrollments in the same course wait until this one commits.
+    private static final String COUNT_ENROLLED_MYSQL =
+            "SELECT COUNT(*) FROM enrollments WHERE offering_id = ? AND status = 'ENROLLED' FOR SHARE";
+    private static final String COUNT_ENROLLED_POSTGRESQL =
+            "SELECT COUNT(*) FROM enrollments WHERE offering_id = ? AND status = 'ENROLLED'";
+    private final String countEnrolledSql;
+
     public EnrollmentService(EnrollmentRepository enrollmentRepository,
                              StudentRepository studentRepository,
                              CourseOfferingRepository offeringRepository,
@@ -35,6 +50,17 @@ public class EnrollmentService {
         this.studentRepository = studentRepository;
         this.offeringRepository = offeringRepository;
         this.jdbc = jdbc;
+        this.countEnrolledSql = isPostgreSql(jdbc.getDataSource())
+                ? COUNT_ENROLLED_POSTGRESQL
+                : COUNT_ENROLLED_MYSQL;
+    }
+
+    private static boolean isPostgreSql(DataSource dataSource) {
+        try (Connection connection = dataSource.getConnection()) {
+            return "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not tell which database the portal is using", e);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -88,9 +114,9 @@ public class EnrollmentService {
             throw new EnrollmentException(ErrorCode.COURSE_CLOSED);
         }
 
-        // 3. Count enrolled students (with shared lock to see latest committed data)
+        // 3. Count enrolled students, seeing the latest committed data (see countEnrolledSql)
         Integer enrolled = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM enrollments WHERE offering_id = ? AND status = 'ENROLLED' FOR SHARE",
+                countEnrolledSql,
                 Integer.class,
                 offeringId
         );
