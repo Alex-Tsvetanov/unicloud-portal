@@ -190,6 +190,7 @@ Check all of these. Most OIDC libraries do it for you:
 - Exchange the code from the backend only, over HTTPS.
 - Never pass portal tokens to browser JavaScript. Never put them in URLs or logs.
 - Use your own session for your own app. Use the `role` and `permissions` claims as input to your own authorization checks, not as a replacement for them.
+- Treat a role or permission you do not know as no access (see [User claims](#user-claims)).
 - A module's tokens work only for that module and for `/userinfo`. The portal's own API (`/api/v1/...`) refuses them.
 
 ## User claims
@@ -206,9 +207,16 @@ The claims are in the `id_token`, and `/userinfo` returns the same ones for the 
 | `given_name` | `profile` | `"Александър"` | |
 | `family_name` | `profile` | `"Стоянов"` | |
 | `name` | `profile` | `"Александър Стоянов"` | |
-| `role` | `unicloud` | `"STUDENT"` | One of `STUDENT`, `TEACHER`, `INSPECTOR`, `ADMIN` |
-| `permissions` | `unicloud` | `["STUDENT_PROFILE_READ_OWN", "COURSE_OFFERING_READ", "ENROLLMENT_REQUEST_CREATE"]` | The portal's permission names |
+| `role` | `unicloud` | `"STUDENT"` | Today one of `STUDENT`, `TEACHER`, `INSPECTOR`, `ADMIN`. More will come (see below) |
+| `permissions` | `unicloud` | `["STUDENT_PROFILE_READ_OWN", "COURSE_OFFERING_READ", "ENROLLMENT_REQUEST_CREATE"]` | The portal's permission names. More will come |
 | `student` | `unicloud` | `{"faculty_number": "121219001", "specialty": "Компютърни науки", "study_year": 2, "status": "ACTIVE"}` | Only for students. `status` is `ACTIVE`, `INTERRUPTED` or `GRADUATED` |
+
+**Unknown values mean no access.** The portal adds roles, permissions and claims over time. It never renames or removes one. Your code must accept a `role` or a permission it does not know, and grant nothing for it. Do not fail the login, and do not map it to a default role.
+
+**Coming soon.** The next release adds:
+- the role `DEAN`: the head of one faculty. A teacher stays `TEACHER`; the portal has no separate "professor".
+- the permission `STUDENT_PROFILE_READ_FACULTY`: read the profiles of the students in your own faculty. It is the default for `DEAN`, with `COURSE_OFFERING_READ`.
+- the claim `faculty` in the `unicloud` scope, for example `{"code": "FCST", "name": "Факултет по компютърни системи и технологии"}`. Every user who belongs to a faculty gets it; admins do not.
 
 The ID token travels again in the logout URL (`id_token_hint`), where proxies may log it. That is one more reason to ask only for the scopes you use.
 
