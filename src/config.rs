@@ -51,7 +51,9 @@ impl Config {
             Some("development") => Environment::Development,
             Some(other) => bail!("APP_ENV must be production, staging or development, not {other}"),
         };
+        // APP_JWT_PRIVATE_KEY: the name the Java portal used for the same key (existing Render settings)
         let signing_key_pem = var("APP_SIGNING_KEY_PEM")
+            .or_else(|| var("APP_JWT_PRIVATE_KEY"))
             .context("APP_SIGNING_KEY_PEM is required: the RSA private key (PKCS#8 PEM) that signs tokens")?
             .replace("\\n", "\n");
         let hosts_raw = var("APP_SSO_ALLOWED_CALLBACK_HOSTS").unwrap_or_else(|| parse_hosts_file(DEFAULT_CALLBACK_HOSTS));

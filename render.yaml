@@ -42,5 +42,7 @@ services:
       - key: APP_DEMO_PASSWORD
         generateValue: true
       # Staging's own token signing key (RSA private key, PKCS#8 PEM text). Never production's.
+      # The portal also reads APP_JWT_PRIVATE_KEY, the Java portal's name for it, so the existing
+      # service keeps working until this is set.
       - key: APP_SIGNING_KEY_PEM
         sync: false
