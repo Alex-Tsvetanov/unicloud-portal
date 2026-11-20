@@ -276,21 +276,23 @@ Grades and materials are not here: they belong to Team 3 and Team 2.
 
 ## Testing a module against staging
 
-A module team tests its own changes on its own machine against the portal's **staging** deployment. No local copy of the portal is needed. Staging has two things production does not:
+A module team tests its own changes on its own machine against the portal's **staging** deployment.
+
+**Staging address:** `https://unicloud-portal-staging-tszc.onrender.com`. It runs the new Rust portal: register your module and create your test users again, because the old registrations and users are not carried over. No local copy of the portal is needed. Staging has two things production does not:
 
 - **Any callback URL works**, so the portal can send the browser back to `http://localhost:3000/...` on a developer's machine. The module's backend calls staging's `/oauth2/token` over the internet as usual.
-- **Staging tools**, with no login needed: a page at `<staging>/staging` and the same actions as an API. With them a team makes its own test users, with exactly the role and permissions it needs, and registers its module (with the `directory` grant if it needs it).
+- **Staging tools**, with no login needed: a page at `https://unicloud-portal-staging-tszc.onrender.com/staging` and the same actions as an API. With them a team makes its own test users, with exactly the role and permissions it needs, and registers its module (with the `directory` grant if it needs it).
 
 **Step by step:**
 
-1. Open `<staging>/staging`.
+1. Open `https://unicloud-portal-staging-tszc.onrender.com/staging`.
 2. Under **Register your module for single sign-on**, pick a client id (for example `module-x`) and register. Tick the directory box if your backend needs [the directory API](#the-directory-api). Copy the secret: it is shown once. Register again under a new id if it is lost.
 3. Under **Create a test user**, pick a role, and a faculty for a teacher, dean or inspector. The role's default permissions are given; change them in the users table. Add a student record for a student. Choose the password yourself. The user can sign in at once.
 4. Point the module's OIDC library at staging:
 
 | Setting | Value |
 |---|---|
-| Issuer / discovery | `<staging>` (`/.well-known/openid-configuration`) |
+| Issuer / discovery | `https://unicloud-portal-staging-tszc.onrender.com` (`/.well-known/openid-configuration`) |
 | Client id and secret | From step 2 |
 | Client authentication | `client_secret_basic` |
 | Callback | Anything, for example `http://localhost:3000/auth/callback` |
@@ -312,7 +314,7 @@ Staging's free hosting sleeps after 15 minutes without visitors, so the first re
 | `POST /api/v1/staging/sso-clients` | Registers a module. Body: `clientId`, `name`, `redirectUris`, optionally `postLogoutRedirectUris` and `directory` (true for the directory grant). Returns the secret once |
 
 ```bash
-curl -X POST <staging>/api/v1/staging/users -H 'Content-Type: application/json' -d '{
+curl -X POST https://unicloud-portal-staging-tszc.onrender.com/api/v1/staging/users -H 'Content-Type: application/json' -d '{
   "email": "x.teacher@test.tu-sofia.bg", "password": "a-long-password",
   "firstName": "Test", "lastName": "Teacher", "role": "TEACHER", "faculty": "FCST",
   "permissions": ["COURSE_OFFERING_READ", "STUDENT_PROFILE_READ_ANY"]}'

@@ -4,7 +4,7 @@ The Unified University Portal: accounts, academic profiles, the course catalogue
 
 **Stack:** Rust · axum · sqlx · PostgreSQL 17 · Maud components with htmx (server-rendered, no JavaScript build) · Docker · GitHub Actions · Render (staging) · Azure Container Apps (production)
 
-**Staging (Render):** the address is at the top of the `unicloud-portal-staging` service in the Render dashboard.
+**Staging (Render):** https://unicloud-portal-staging-tszc.onrender.com (staging tools at `/staging`)
 
 **Design and decisions:** [docs/prd.md](docs/prd.md) (what and why), [openspec/changes/rust-rewrite/design.md](openspec/changes/rust-rewrite/design.md) (how), [openspec/changes/rust-rewrite/specs/](openspec/changes/rust-rewrite/specs/) (the requirements, testable), [docs/adr/](docs/adr/) (decisions), [GLOSSARY.md](GLOSSARY.md) (words), [docs/slo.md](docs/slo.md) (the uptime promise), [docs/sso.md](docs/sso.md) (for module teams).
 
