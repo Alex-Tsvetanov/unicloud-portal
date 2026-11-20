@@ -280,3 +280,23 @@ The Rust portal keeps everything above that `sso.md` sections 1 to 10 promise to
 - **Fresh database.** Spring's `oauth2_*` and `SPRING_SESSION*` tables are not migrated. Module teams register again on staging. The issuer URL stays the same.
 - **Spelling.** New wire names use US "enrollment", as the existing permission names do.
 - **Unverified items are decided, not inherited.** Where this file says Unverified (Spring default), the Rust portal sends what the recording of the Java staging shows, unless the recording contradicts `sso.md`, in which case `sso.md` wins.
+
+## Recorded from the Java staging (2026-11-20)
+
+The file `tests/golden/java-staging-2026-11-20.json` holds a recording of the live Java staging. Secrets, tokens and codes are redacted. It settles these "Unverified" items:
+
+- **Discovery** advertises the Spring defaults: `client_secret_basic`, `client_secret_post`, `client_secret_jwt`, `private_key_jwt` and TLS methods; the grants `authorization_code`, `client_credentials`, `refresh_token` and token exchange; revocation and introspection endpoints; DPoP algorithms; and `scopes_supported: ["openid"]`. Only part of this works for a registered module. The Rust portal advertises only what it serves.
+- **JWKS**: one key with `kty`, `e`, `kid` and `n`. There is no `use` and no `alg`.
+- **Token response**: `access_token`, `scope` (space separated, any order), `id_token`, `token_type` `"Bearer"`, `expires_in` `1799`.
+- **ID token**: the header is `{"kid", "alg": "RS256"}`, with no `typ`. Claims: `iss`, `sub` (string), `aud` (**a single string**, not an array), `azp`, `exp`, `iat`, `auth_time`, `nonce` (if sent), `sid`, `jti`, plus the user claims for the granted scopes.
+- **Access token**: `iss`, `sub`, `aud` (string), `nbf`, `iat`, `exp`, `jti`, and `scope` as a **JSON array**.
+- **`/userinfo`**: GET and POST both work. Without a token, or with an ID token, a revoked token or a portal token, the answer is 401 `{"error": "invalid_token"}`.
+- **Token errors**:
+  - A replayed code or a wrong verifier gives 400 `{"error": "invalid_grant"}`.
+  - A wrong secret, or `client_secret_post`, gives 401 `{"error": "invalid_client"}`.
+  - `client_credentials` for a client without that grant gives 400 `unauthorized_client`.
+  - An unknown grant gives 400 with `error`, `error_description` and `error_uri`.
+- **Authorize errors that redirect** carry `error`, `error_description`, `error_uri` and `state`. For example, missing PKCE gives `error_description=OAuth 2.0 Parameter: code_challenge`, and `plain` PKCE names `code_challenge_method`.
+- **Authorize errors that do not redirect**: an unknown client, or `response_type=token`, gave **401 with an empty body**. `docs/sso.md` promises a plain 400 page. The Rust portal follows the doc: a 400 page.
+- **Cookie**: `Path=/; Secure; HttpOnly; SameSite=Lax`. Logout clears it with `Max-Age=0`.
+- **`continueUrl`** ends with a stray `&continue` that Spring appends. It has no effect.

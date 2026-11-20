@@ -1,0 +1,5 @@
+# Hosts whose single sign-on callbacks production accepts (docs/sso.md, "Callback URLs per environment").
+# Entries are comma separated, on one or more lines: an exact host (library.tu-sofia.bg) or every subdomain of a domain (*.tu-sofia.bg,
+# which does not include tu-sofia.bg itself). Change it with a pull request.
+# APP_SSO_ALLOWED_CALLBACK_HOSTS (comma separated) overrides the whole list without a release.
+# Empty today: no module is live yet.

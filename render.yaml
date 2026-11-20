@@ -1,10 +1,9 @@
 # Render Blueprint: the portal's staging, with its own PostgreSQL, on Render's free plans.
-# In Render: New > Blueprint, pick this repository. Render asks once for the two values marked
-# "sync: false" (the token signing key pair, as PEM text; see the README's "Get set up" for the
-# openssl commands). Everything else is wired up here.
+# In Render: New > Blueprint, pick this repository. Render asks once for the value marked
+# "sync: false" (the token signing key, as PEM text; see the README's "Get set up").
 #
 # Free PostgreSQL databases expire after 30 days. Delete the database in Render and sync the
-# Blueprint again; Flyway rebuilds the tables and the test data at the next start.
+# Blueprint again; the portal rebuilds its tables and the demo data at the next start.
 
 databases:
   - name: unicloud-portal-staging-db
@@ -24,39 +23,24 @@ services:
     healthCheckPath: /health
     envVars:
       # Staging: any SSO callback URL, and the staging tools at /staging (docs/sso.md)
-      - key: SPRING_PROFILES_ACTIVE
+      - key: APP_ENV
         value: staging
-      - key: SPRING_FLYWAY_LOCATIONS
-        value: classpath:db/migration-postgresql
-      # The database's parts, from Render; the app puts them together into a JDBC address
-      # (Spring fills in the ${...} placeholders at startup)
-      - key: PGHOST
-        fromDatabase:
-          name: unicloud-portal-staging-db
-          property: host
-      - key: PGPORT
-        fromDatabase:
-          name: unicloud-portal-staging-db
-          property: port
-      - key: PGDATABASE
-        fromDatabase:
-          name: unicloud-portal-staging-db
-          property: database
-      - key: PGUSER
-        fromDatabase:
-          name: unicloud-portal-staging-db
-          property: user
-      - key: PGPASSWORD
-        fromDatabase:
-          name: unicloud-portal-staging-db
-          property: password
       - key: DATABASE_URL
-        value: jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}?user=${PGUSER}&password=${PGPASSWORD}
-      # The issuer of SSO tokens: the service's own https address, which Render sets
-      - key: APP_SSO_ISSUER
-        value: ${RENDER_EXTERNAL_URL}
-      # Staging's own token signing key pair (PEM text). Never production's.
-      - key: APP_JWT_PRIVATE_KEY
-        sync: false
-      - key: APP_JWT_PUBLIC_KEY
+        fromDatabase:
+          name: unicloud-portal-staging-db
+          property: connectionString
+      # The Rust portal keeps its tables in their own schema, so it starts fresh next to the
+      # Java portal's old tables instead of replacing the database.
+      - key: APP_DB_SCHEMA
+        value: portal
+      # The issuer of SSO tokens is the service's own https address (RENDER_EXTERNAL_URL, set by Render)
+      # The free plan has 0.1 CPU and 512 MB: keep the pool small
+      - key: APP_DB_POOL_MAX
+        value: "5"
+      # Demo people and courses (README, "Demo accounts"). Render generates the password; it is on the
+      # service's Environment page.
+      - key: APP_DEMO_PASSWORD
+        generateValue: true
+      # Staging's own token signing key (RSA private key, PKCS#8 PEM text). Never production's.
+      - key: APP_SIGNING_KEY_PEM
         sync: false

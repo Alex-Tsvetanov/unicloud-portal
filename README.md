@@ -1,335 +1,180 @@
 # UniCloud Portal
 
-The Unified University Portal: accounts, academic profiles and course enrollment. It is also the single source of truth for who is who, which the other UniCloud teams read through its API.
+The Unified University Portal: accounts, academic profiles, the course catalogue and enrollment. It is also the single sign-on provider for every other UniCloud module, and the directory those modules read who is who from.
 
-**Stack:** Java 25 · Spring Boot 4.1 · MySQL 8.4 (production) · PostgreSQL 17 (staging) · Flyway · Docker · GitHub Actions · Azure Container Apps (production) · Render (staging)
+**Stack:** Rust · axum · sqlx · PostgreSQL 17 · Maud components with htmx (server-rendered, no JavaScript build) · Docker · GitHub Actions · Render (staging) · Azure Container Apps (production)
 
-**Production (Azure):** `https://<production-url>` (the exact address is in the "Live at" line of the latest deploy run in the **Actions** tab)
+**Staging (Render):** the address is at the top of the `unicloud-portal-staging` service in the Render dashboard.
 
-**Staging (Render):** `https://<staging-url>` (the address is at the top of the `unicloud-portal-staging` service in the Render dashboard)
-
-> There is one branch, `main`. Every merge goes to staging within minutes, and to production once a reviewer approves the deploy. Try every change on staging first, and approve only what you would show the Academic Council.
+**Design and decisions:** [docs/prd.md](docs/prd.md) (what and why), [openspec/changes/rust-rewrite/design.md](openspec/changes/rust-rewrite/design.md) (how), [openspec/changes/rust-rewrite/specs/](openspec/changes/rust-rewrite/specs/) (the requirements, testable), [docs/adr/](docs/adr/) (decisions), [GLOSSARY.md](GLOSSARY.md) (words), [docs/slo.md](docs/slo.md) (the uptime promise), [docs/sso.md](docs/sso.md) (for module teams).
 
 ## Contents
 
 1. [How it works](#how-it-works)
-2. [Environments](#environments)
-3. [What's in the repo](#whats-in-the-repo)
-4. [Get set up](#get-set-up)
-5. [Everyday workflow](#everyday-workflow)
-6. [The pipeline](#the-pipeline)
+2. [What's in the repo](#whats-in-the-repo)
+3. [Run it locally](#run-it-locally)
+4. [Everyday workflow](#everyday-workflow)
+5. [The pipeline](#the-pipeline)
+6. [Settings](#settings)
 7. [Changing the database](#changing-the-database)
 8. [Rules the code must follow](#rules-the-code-must-follow)
-9. [Checking and rolling back production](#checking-and-rolling-back-production)
-10. [Load testing](#load-testing)
-11. [Troubleshooting](#troubleshooting)
+9. [Load testing](#load-testing)
+10. [Troubleshooting](#troubleshooting)
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    PR[Pull request] --> T["test<br/>MySQL 8.4 + Flyway + tests"]
-    T --> B["build<br/>Docker image"]
-    B -. merge to main .-> S["deploy-staging<br/>Render"]
-    B -. merge to main .-> A{{"approval"}}
-    A --> D["deploy<br/>Azure Container Apps"]
-    S --> SDB[("PostgreSQL 17<br/>on Render")]
-    D --> DB[("unicloud<br/>Azure MySQL 8.4")]
+    B[Browser] -->|HTML + htmx, one session cookie| P[Portal replicas]
+    M[Module backends] -->|OIDC: /oauth2/token, /userinfo| P
+    M -->|/api/v1/directory, client_credentials| P
+    P --> DB[(PostgreSQL)]
 ```
 
-- Every pull request runs `test`, `test-postgres` and `build`. Nothing is deployed.
-- Every merge to `main` runs the same jobs. Once they pass, `deploy-staging` asks Render to deploy that exact commit to staging.
-- At the same time, `deploy` waits for a reviewer's approval. Once approved, it deploys the same commit to production. New replicas start before old ones stop, so the portal stays up during a deploy.
-- Production runs 2 to 10 replicas behind Azure's load balancer and adds replicas as traffic grows.
-- Only Flyway migrations create or change tables. Hibernate never does.
-
-## Environments
-
-| | Staging | Production |
-| --- | --- | --- |
-| Branch | `main` | `main`, after approval |
-| Runs on | Render, free web service, Frankfurt | Azure Container Apps, Frankfurt, 2 to 10 replicas |
-| Database | PostgreSQL 17, Render's free database in Frankfurt | MySQL 8.4 on Azure (`unicloud`) |
-| Migrations | `db/migration-postgresql` | `db/migration` |
-| Login keys | Staging's own JWT key pair, set in Render | Production's pair, in the GitHub secrets |
-| Deployed by | The `deploy-staging` job, through Render's deploy hook, on every merge | The `deploy` job, once a reviewer approves it |
-| Data | Test data only | Real data |
-
-Both databases get the same tables from Flyway: production from the MySQL files in `db/migration`, staging from their PostgreSQL copies in `db/migration-postgresql`. Staging applies a new migration right after the merge, production when its deploy is approved. Staging's database lives on Render, apart from production's, so nothing on staging can change production data.
-
-Staging sleeps after 15 minutes without visitors, so the first page after a quiet spell can take 1 to 3 minutes. Render deletes its free database 30 days after it's created, so DevOps replaces staging's database each month; Flyway rebuilds the tables and the test data on the next start. Never copy production data into staging.
+- One stateless Rust binary. Any replica answers any request. Sessions, codes and logins live in PostgreSQL.
+- Pages are rendered on the server. Each page is built from Maud components (Rust functions that return HTML). htmx swaps fragments in place: the catalogue search, enrolling, cancelling and rejecting work without a full page load, and every page still works as plain forms.
+- One cookie, `__Host-UNICLOUD_SSO`, serves the portal UI and single sign-on ([ADR 0003](docs/adr/0003-one-cookie-session.md)).
+- The OpenID Connect provider is our own code ([ADR 0001](docs/adr/0001-rust-rewrite-with-hypermedia-ui.md)). Its behaviour is pinned by `tests/sso_conformance.rs` and [docs/sso-wire-contract.md](docs/sso-wire-contract.md).
+- Enrollment takes a place in one conditional `UPDATE`, so the 08:00 rush cannot oversell (`tests/portal.rs` fires 40 students at 10 places).
 
 ## What's in the repo
 
 ```text
-.devcontainer/devcontainer.json   Codespaces setup: Java 25 and Docker
-.github/workflows/deploy.yml      The pipeline: test, build, deploy
-Dockerfile                        Builds the production image
-infra/setup-azure.sh              One-time Azure setup (DevOps only)
-loadtest/spike.js                 k6 test of the 08:00 enrollment rush
-pom.xml, mvnw, .mvn/              Maven build
-src/main/java/bg/tusofia/unicloud/portal/
-    PortalApplication.java        Spring Boot entry point
-    HealthController.java         /health and /  (keep them, see Rules)
-    ServedByFilter.java           X-Served-By header (keep it)
-    Replica.java                  Replica name for the two above
-    sso/                          Single sign-on for the other UniCloud modules (docs/sso.md)
-src/main/resources/
-    application.properties        Settings; production values come from environment variables
-    sso-callback-hosts.properties Hosts whose single sign-on callbacks production accepts
-    db/migration/                 Flyway migrations for MySQL: V1__init_schema.sql, then V2__..., V3__...
-    db/migration-postgresql/      The same migrations for PostgreSQL, used by staging
-src/test/java/                    Tests, run against MySQL 8.4 in the pipeline
-docs/sso.md                       Single sign-on: how other modules log users in through the portal
+src/
+  main.rs, lib.rs       start-up, routes, graceful shutdown
+  config.rs             every setting, from environment variables
+  access.rs             roles and permissions (bit positions are part of the contract)
+  accounts/             users, passwords (Argon2id), sign-in, staff and student creation
+  enrollment.rs         enroll, cancel, reject without overselling
+  oidc/                 the SSO provider: discovery, keys, authorize, token, userinfo, logout, modules
+  directory.rs          /api/v1/directory for modules
+  staging.rs            /staging and /api/v1/staging (staging and development only)
+  ui/                   Maud components and pages
+  web/                  session, current user, CSRF
+  ops.rs                /health, X-Served-By, hourly cleanup
+migrations/             SQL migrations, applied at start
+assets/                 htmx.min.js (2.0.11), app.css, app.js
+config/                 sso-callback-hosts.txt: production's allowed callback hosts
+tests/                  black-box suites, the Java staging recording, a test-only key
+docs/, openspec/        PRD, design, specs, ADRs, SLO, SSO guide
+render.yaml             the staging Blueprint
+infra/setup-azure.sh    one-time Azure setup (DevOps)
+loadtest/spike.js       k6 test of the 08:00 rush
 ```
 
-## Get set up
+## Run it locally
 
-### Option A: GitHub Codespaces (recommended)
+You need Rust (stable), Docker and Git.
 
-1. On the repo page, click **Code → Codespaces → Create codespace on main**. The first start takes a few minutes while it installs Java 25 and Docker.
-2. In the terminal, start a local MySQL 8.4:
-
-   ```bash
-   docker run --name unicloud-mysql -d -p 3306:3306 \
-     -e MYSQL_ROOT_PASSWORD=dev -e MYSQL_DATABASE=unicloud mysql:8.4
-   ```
-
-3. Create the key pair the app signs login tokens with. It lives in `secrets/`, which git ignores, so every checkout makes its own (once):
+1. Start PostgreSQL 17:
 
    ```bash
-   mkdir -p secrets
-   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/private.pem
-   openssl pkey -in secrets/private.pem -pubout -out secrets/public.pem
+   docker run --name unicloud-rust-pg -d -p 55432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=unicloud postgres:17
    ```
 
-4. Wait about 20 seconds for MySQL to come up, then start the app:
+2. Start the portal with demo data (`scripts/dev.ps1` on Windows):
 
    ```bash
-   ./mvnw spring-boot:run
+   scripts/dev.sh
    ```
 
-5. Codespaces offers to open port 8080 in the browser. You should see JSON with `"service":"unicloud-portal"`, and Flyway has created the tables in your local database.
+3. Open http://localhost:8090. The demo accounts all use the password `demo-pass-123`:
 
-### Option B: your own computer
+   | Role | Email |
+   |---|---|
+   | Student | `student1@student.tu-sofia.bg` to `student5@...` |
+   | Teacher | `ivan.petrov@tu-sofia.bg` |
+   | Dean (FCST) | `dean.fcst@tu-sofia.bg` |
+   | Inspector | `inspector.fcst@tu-sofia.bg` |
+   | Admin | `admin@tu-sofia.bg` |
 
-Install JDK 25 (Eclipse Temurin), Docker and Git, then clone the repo and follow steps 2 to 5 above. The app runs at http://localhost:8080.
+   The staging tools are at http://localhost:8090/staging.
 
-```bash
-git clone https://github.com/rata5/unicloud-portal.git
-cd unicloud-portal
-```
+4. Run the tests (they use the same database):
 
-### Local commands
+   ```bash
+   cargo test
+   ```
 
-| Task | Command |
-| --- | --- |
-| Run all tests (the local MySQL must be running; the tests make their own JWT keys) | `./mvnw verify` |
-| Start the app | `./mvnw spring-boot:run` |
-| Stop or start the local database | `docker stop unicloud-mysql`, `docker start unicloud-mysql` |
-| Wipe the local database and start fresh | `docker rm -f unicloud-mysql`, then the `docker run` command again |
-| Open a SQL prompt | `docker exec -it unicloud-mysql mysql -uroot -pdev unicloud` |
-
-The app reads its database address from `DATABASE_URL`. When that isn't set, it uses the local MySQL above, so you never need production credentials.
+The scripts use `tests/fixtures/test-only-signing-key.pem`. It exists only for tests and local runs. Never use it on staging or production.
 
 ## Everyday workflow
 
-`main` is protected: nobody can push to it directly, and every change goes through a pull request whose `test`, `test-postgres` and `build` checks must pass. Each change needs one pull request. It reaches staging and production from the same merge.
+`main` is protected. Every change goes through a pull request whose `test` and `build` checks must pass.
 
-1. Start a branch from the latest `main`:
-
-   ```bash
-   git switch main && git pull
-   git switch -c feature/short-description
-   ```
-
-2. Make your change and run `./mvnw verify`.
-3. Commit and push the branch:
-
-   ```bash
-   git add .
-   git commit -m "Short summary of the change"
-   git push -u origin feature/short-description
-   ```
-
-4. Open a pull request into `main`. Wait for green checks and a teammate's approval.
-5. Click **Squash and merge**, then delete the branch.
-6. A few minutes later, Render deploys it to staging. Try your change there before it goes any further.
-
-### Releasing to production
-
-Every merge starts a `deploy` job that waits for approval. The reviewers of the `production` environment (DevOps) approve it:
-
-1. Check the change on staging.
-2. In the **Actions** tab, open the run for that merge. It shows **Review deployments** on the waiting `deploy` job.
-3. Tick `production` and click **Approve and deploy**. When the job is green, `/health` on production reports that commit.
-
-Only the newest merge has a deploy waiting. When a new merge arrives, GitHub cancels the older deploy that is still waiting, so approving always ships the latest `main`, with every change before it. Approve only when everything merged since the last release works on staging. If one of those changes doesn't work, revert it first (see [Checking and rolling back production](#checking-and-rolling-back-production)) and approve the revert's deploy.
-
-An urgent production fix follows the same path: one pull request into `main`, then approve its deploy straight away.
+1. Branch from the latest `main`: `git switch main && git pull && git switch -c feature/short-description`.
+2. Make the change. Run `cargo fmt`, `cargo clippy --all-targets -- -D warnings` and `cargo test`.
+3. If the change touches a requirement, update its spec in `openspec/`. If it changes what modules see, update `docs/sso.md`.
+4. Push, open a pull request into `main`, wait for green checks and a teammate's approval, then squash and merge.
+5. Render deploys `main` to staging a few minutes later. Try the change there.
+6. Production (team repository only): a reviewer of the `production` environment approves the waiting `deploy` job.
 
 ## The pipeline
 
-It's defined in `.github/workflows/deploy.yml`.
+Defined in `.github/workflows/deploy.yml`.
 
-| Job | Runs on | What it does | Typical time |
-| --- | --- | --- | --- |
-| `test` | Every pull request, and every merge to `main` | Starts MySQL 8.4, lets Flyway apply every migration, runs `./mvnw verify` | About 2 min |
-| `test-postgres` | Every pull request, and every merge to `main` | Runs the same tests on PostgreSQL 17 with the migrations in `db/migration-postgresql`, as staging does. Production's deploy doesn't wait for it | About 2 min |
-| `build` | Every pull request, and every merge to `main` | Builds the Docker image; on `main` it also pushes it to GHCR, tagged with the commit SHA | About 3 min |
-| `deploy-staging` | Merges to `main`, after `test-postgres` and `build` pass | Calls Render's deploy hook with the commit SHA. Render then builds and deploys that commit to staging | A few seconds, then 3 to 6 min on Render |
-| `deploy` | Merges to `main`, after `build` passes and a reviewer approves | Deploys the image to Azure Container Apps and waits until `/health` shows the new commit | 2 to 4 min |
+| Job | Runs on | What it does |
+|---|---|---|
+| `test` | Every pull request and every merge | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` against PostgreSQL 17 |
+| `build` | After `test` | Builds the Docker image. On `main` it pushes it to GHCR, tagged with the commit |
+| `deploy-staging` | Merges to `main` | Calls Render's deploy hook if `RENDER_DEPLOY_HOOK` is set. Otherwise the Blueprint deploys `main` by itself |
+| `deploy` | Merges to `main` in `rata5/unicloud-portal`, after approval | Deploys the image to Azure Container Apps (2 to 10 replicas) and waits until `/health` shows the commit |
 
-A red job stops everything after it, so a failing test never reaches staging or production. Click the failed job to read its log, fix the problem and push to the same branch again.
+Production secrets (team repository, **Settings → Secrets and variables → Actions**): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `GHCR_PAT`, `DATABASE_URL` (a `postgres://` URL from `infra/setup-azure.sh`) and `JWT_PRIVATE_KEY` (the RSA private key in PKCS#8 PEM that signs tokens).
 
-A failed `deploy` is usually an Azure problem rather than your code: send the run's link to the team's DevOps engineer.
+## Settings
 
-The pipeline's secrets (`AZURE_*`, `DATABASE_URL`, `GHCR_PAT`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY`) are managed by DevOps under **Settings → Secrets and variables → Actions**. You don't need them, and credentials must never appear in code.
+| Variable | Meaning | Default |
+|---|---|---|
+| `APP_ENV` | `production`, `staging` or `development`. Not `production` turns on the staging tools and the `any` callback rule | `production` |
+| `DATABASE_URL` | `postgres://user:password@host:port/db` | required |
+| `APP_DB_SCHEMA` | PostgreSQL schema for the tables | `public` |
+| `APP_DB_POOL_MAX` | Connections per replica | `10` |
+| `APP_SIGNING_KEY_PEM` | RSA private key (PKCS#8 PEM). The public key and `kid` are derived from it | required |
+| `APP_SSO_ISSUER` | The public `https` address, used as `iss`. Falls back to `RENDER_EXTERNAL_URL`, then to the request | |
+| `APP_SSO_ALLOWED_CALLBACK_HOSTS` | Replaces `config/sso-callback-hosts.txt` (production) | |
+| `APP_CURRENT_SEMESTER` | The semester the catalogue shows | `2026-27-W` |
+| `APP_DEMO_PASSWORD` | Staging and development: seed demo people and courses with this password | |
+| `APP_BOOTSTRAP_ADMIN_EMAIL`, `APP_BOOTSTRAP_ADMIN_PASSWORD` | Create the first admin if none exists. The password must be changed at first sign-in | |
+| `PORT` | Listen port | `8080` |
 
-`JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` hold the PEM text of the key pair production signs login tokens with (the deploy passes them to the app as Container App secrets). Create it once with the `openssl` commands from "Get set up", paste each file's full contents into its secret, and keep the private key nowhere else. Rotating the pair logs every user out, so do it between semesters.
+To make a signing key:
 
-Staging has its own settings, kept in Render on the `unicloud-portal-staging` service's **Environment** page: its `DATABASE_URL` (Render's PostgreSQL database), `SPRING_FLYWAY_LOCATIONS=classpath:db/migration-postgresql`, its own key pair in `APP_JWT_PRIVATE_KEY` and `APP_JWT_PUBLIC_KEY`, `APP_SSO_ISSUER` set to staging's `https://` address (the issuer of single sign-on tokens), and `SPRING_PROFILES_ACTIVE=staging`. The profile lets other modules' developers use any callback URL, and opens the staging tools at `/staging`, where they create test users with any permissions and register their module without logging in (see [docs/sso.md](docs/sso.md)). Never set that profile on production. Never reuse production's values there. Production's `APP_SSO_ISSUER` is set by the `deploy` job.
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out signing-key.pem
+```
 
-How the deploys are set up (DevOps, once):
-
-- **Staging:** the Render service builds from `main`, with **Auto-Deploy** off. The service's **Deploy Hook** URL (Render, **Settings**) is stored as the `RENDER_DEPLOY_HOOK` secret of the `staging` environment (GitHub, **Settings → Environments**). Anyone with the URL can deploy, so treat it like a password. Without the secret, `deploy-staging` only prints a warning.
-- **Production:** the `production` environment (GitHub, **Settings → Environments**) lists DevOps under **Required reviewers**. Without reviewers, `deploy` runs as soon as `build` passes, with no approval.
+Paste the whole file into the secret, then delete the file. Changing the key logs every module user out, so do it between semesters.
 
 ## Changing the database
 
-The schema is in third normal form:
+Add a new file in `migrations/` with the next number, for example `0003_add_x.sql`. Never edit a migration that has run anywhere. The portal applies new migrations at start, under a database lock, before it takes traffic.
 
-```mermaid
-erDiagram
-  USERS ||--o| STUDENTS : "is a"
-  USERS ||--o{ COURSE_OFFERINGS : teaches
-  COURSES ||--o{ COURSE_OFFERINGS : "runs as"
-  STUDENTS ||--o{ ENROLLMENTS : makes
-  COURSE_OFFERINGS ||--o{ ENROLLMENTS : "seats taken"
-  USERS {
-    bigint id PK
-    varchar email UK
-    varchar password_hash
-    varchar first_name
-    varchar last_name
-    varchar role "STUDENT TEACHER INSPECTOR ADMIN"
-    bigint permissions_mask "bits of user.domain.Permission"
-    boolean enabled
-  }
-  STUDENTS {
-    bigint user_id PK, FK
-    varchar faculty_number UK
-    varchar specialty
-    tinyint study_year
-    varchar status "ACTIVE INTERRUPTED GRADUATED"
-  }
-  COURSES {
-    int id PK
-    varchar code UK
-    varchar title
-    tinyint ects_credits
-  }
-  COURSE_OFFERINGS {
-    bigint id PK
-    int course_id FK
-    varchar semester "e.g. 2026-27-W"
-    bigint teacher_id FK
-    smallint capacity
-    boolean is_open
-  }
-  ENROLLMENTS {
-    bigint id PK
-    bigint student_id FK
-    bigint offering_id FK
-    varchar status "ENROLLED CANCELLED"
-    datetime created_at
-  }
-```
-
-To change it:
-
-1. Add a new file in `src/main/resources/db/migration`, numbered after the last one: `V4__add_course_description.sql`, then `V5__...`. Note the two underscores after the number.
-2. Add its PostgreSQL copy, with the same file name, in `src/main/resources/db/migration-postgresql`. The header of `V1__init_schema.sql` there shows how the MySQL types map.
-3. Never edit a migration that has already run anywhere, `V1` included. Flyway keeps a checksum of every file and refuses to start if one changes.
-4. Run `./mvnw verify`. Flyway applies your new file to the local MySQL first, so SQL errors show up immediately.
-5. Open a pull request as usual. The pipeline applies every migration to a fresh MySQL 8.4 (`test`) and every PostgreSQL copy to a fresh PostgreSQL 17 (`test-postgres`). After the merge, staging applies the new ones to its database, and the next approved deploy applies them to production's.
-
-Keep each change backwards-compatible, because old and new replicas run side by side for a minute during every deploy. To rename or remove a column, add the new column in one release, switch the code over, and drop the old column in a later release.
-
-JPA entities must match the tables. `spring.jpa.hibernate.ddl-auto=validate` stops the app at startup if an entity and its table disagree.
+Old and new replicas run side by side for a minute during every deploy, so each change must work with the previous code. To rename or remove a column, add the new one in one release and drop the old one in a later release.
 
 ## Rules the code must follow
 
-The pipeline and the 08:00 enrollment rush depend on these:
-
-- **Keep `/health` and `/` in `HealthController`.** The deploy waits until `/health` returns the new commit SHA. `/` and the `X-Served-By` header show which replica answered. `/health` must never query the database.
-- **Listen on port 8080 and keep graceful shutdown on**, so deploys and scale-in drop no requests.
-- **Keep the connection pool at 15 or fewer** (`spring.datasource.hikari.maximum-pool-size`). The database allows 171 connections in total, shared by up to 10 replicas.
-- **Let only active students enroll.** Check that `students.status` is `ACTIVE` before taking a seat.
-- **Take a seat in one transaction, behind a lock.** Otherwise two students can both get the last seat at 08:00:
-
-```java
-@Transactional
-public void enroll(long studentId, long offeringId) {
-    // Locks this offering's row: other enrollments in the same course wait their turn
-    Integer capacity = jdbc.query(
-            "SELECT capacity FROM course_offerings WHERE id = ? AND is_open FOR UPDATE",
-            rs -> rs.next() ? rs.getInt(1) : null, offeringId);
-    if (capacity == null) {
-        throw new IllegalStateException("Course is closed");
-    }
-    // A locking read always sees the latest committed enrollments
-    Integer taken = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM enrollments WHERE offering_id = ? AND status = 'ENROLLED' FOR SHARE",
-            Integer.class, offeringId);
-    if (taken >= capacity) {
-        throw new IllegalStateException("Course is full");
-    }
-    jdbc.update("INSERT INTO enrollments (student_id, offering_id) VALUES (?, ?)", studentId, offeringId);
-}
-```
-
-Here `jdbc` is a `JdbcTemplate`. A `DuplicateKeyException` from the insert means a row already exists: if its status is `CANCELLED`, update it back to `ENROLLED`; otherwise the student is already enrolled. Cancelling takes the same row lock first, then sets the status to `CANCELLED`.
-
-## Checking and rolling back production
-
-- **Which version is live:** open `https://<production-url>/health`. `version` is the commit SHA of the running code.
-- **Which replica answered:** the `X-Served-By` response header, or the JSON at `/`.
-- **Logs and metrics:** in the Azure portal, under the Container App `unicloud-portal` (**Monitoring → Log stream** and **Metrics**). Ask DevOps for Reader access.
-- **Roll back:** open the merged pull request on GitHub, click **Revert**, and merge the revert pull request. The pipeline deploys the previous code like any other change.
-
-If production is down and that is too slow, DevOps can redeploy an earlier image directly:
-
-```bash
-az containerapp update -n unicloud-portal -g unicloud-rg \
-  --image ghcr.io/rata5/unicloud-portal:<previous-commit-sha>
-```
-
-Reverting code doesn't undo a migration that has already run. If a migration was the problem, fix the schema with a new migration.
+- **Keep `/health` cheap.** It never touches the database, and the deploy waits until it shows the new commit. Every response carries `X-Served-By` with the replica's name.
+- **Never change a published name.** Roles, permission names and their bit positions, claim names and endpoint paths in `docs/sso.md` only grow ([ADR 0002](docs/adr/0002-grow-the-sso-contract.md)).
+- **Check permissions, not roles.** Every handler asks `user.can(Permission::...)`.
+- **Every state-changing form carries the CSRF token.** The layout sends it automatically for htmx requests.
+- **UI text is Bulgarian; code, logs and docs are English.**
+- **Never log a password, secret, token or code.**
 
 ## Load testing
-
-`loadtest/spike.js` simulates the 08:00 rush: it ramps from 10 to 500 users in 30 seconds and holds them for 2 minutes. It passes only if at least 99.5% of requests succeed and 95% answer within 1 second.
 
 ```bash
 k6 run -e BASE_URL=https://<production-url> loadtest/spike.js
 ```
 
-Check with DevOps before running it against production. Each run spends the database's CPU credits, and there are no load tests in the 24 hours before enrollment opens. Don't run it against staging: its free Render instance is far smaller than production, so the results would say nothing about the 08:00 rush. To test new endpoints, edit the `default` function in `spike.js`.
+It ramps from 10 to 500 users in 30 seconds and holds them for 2 minutes. It passes if at least 99.5% of requests succeed and 95% answer within 1 second ([docs/slo.md](docs/slo.md)). Check with DevOps before running it against production. Don't run it against staging: one free instance says nothing about the rush.
 
 ## Troubleshooting
 
 | Problem | Fix |
-| --- | --- |
-| Push rejected because `main` is a protected branch | Push to a branch and open a pull request |
-| `test` fails with a Flyway or SQL error | Your migration doesn't run on MySQL 8.4. Reproduce it with `./mvnw verify` against the local MySQL |
-| `test` fails with `Schema-validation: missing column` or `missing table` | An entity doesn't match the tables. Add a migration or fix the entity |
-| App won't start: `Migration checksum mismatch` | An applied migration was edited. Undo the edit and put the change in a new `V...` file |
-| Locally: `Communications link failure` | The local MySQL isn't running. Run `docker start unicloud-mysql` and wait 20 seconds |
-| Locally: app won't start, `secrets/private.pem` or `secrets/public.pem` not found | Create the JWT key pair (step 3 of "Get set up") |
-| Locally: port 3306 is already in use | Another MySQL is running. Stop it, or run the container with `-p 3307:3306` and set `DATABASE_URL=jdbc:mysql://localhost:3307/unicloud?user=root&password=dev&sslMode=REQUIRED` |
-| `deploy` fails | Usually Azure, not your code. Send the run's link to DevOps |
-| Staging takes a minute or more to load | It was asleep: the free service sleeps after 15 minutes without visitors. Wait a minute and reload |
-| `test-postgres` fails but `test` passes | The PostgreSQL copy of a migration is missing or different. Fix it in `db/migration-postgresql` |
-| Your change isn't on staging a few minutes after the merge | Open the run in the **Actions** tab. A red job stopped it. A yellow warning on `deploy-staging` means the `RENDER_DEPLOY_HOOK` secret is missing. Otherwise check the deploy's log in Render, then ask DevOps |
-| The `deploy` job shows **Cancelled** | A newer merge replaced it while it waited for approval. Approve the newest run instead |
+|---|---|
+| `pool timed out` at start | PostgreSQL is not reachable. On Windows use `127.0.0.1`, not `localhost`, in `DATABASE_URL` |
+| `APP_SIGNING_KEY_PEM is required` | Set it, or use `scripts/dev.sh`, which uses the test-only key |
+| Forms answer "Формулярът е изтекъл" | The session expired (30 minutes idle) and its CSRF token with it. Reload the page |
+| Staging is slow to answer | Render's free plan sleeps after 15 minutes. The first request wakes it |
+| Staging lost every user and module | Render replaces the free database every 30 days. Sync the Blueprint and register again |

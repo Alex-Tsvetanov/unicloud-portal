@@ -1,6 +1,6 @@
 # Design: UniCloud Portal in Rust
 
-Status: accepted design, not built (2026-11-20). Requirements: [docs/prd.md](../../../docs/prd.md). Decisions: [ADR 0001](../../../docs/adr/0001-rust-rewrite-with-hypermedia-ui.md), [0002](../../../docs/adr/0002-grow-the-sso-contract.md), [0003](../../../docs/adr/0003-one-cookie-session.md). Wire contract to keep: [docs/sso-wire-contract.md](../../../docs/sso-wire-contract.md).
+Status: built on branch `rust-rewrite` (2026-11-20). Requirements: [docs/prd.md](../../../docs/prd.md). Decisions: [ADR 0001](../../../docs/adr/0001-rust-rewrite-with-hypermedia-ui.md), [0002](../../../docs/adr/0002-grow-the-sso-contract.md), [0003](../../../docs/adr/0003-one-cookie-session.md). Wire contract to keep: [docs/sso-wire-contract.md](../../../docs/sso-wire-contract.md).
 
 ## Context
 The Java portal works and has a published SSO contract (`docs/sso.md`). Module teams already code against it. The rebuild must replace the internals without the modules noticing, except that they must register again. It must also add deans, faculties and a directory API, run on free plans, and survive the 08:00 rush on 2 or more replicas.
@@ -72,10 +72,11 @@ erDiagram
 | `courses` | `code` (unique, the shared course id), `title`, `ects_credits`, `faculty_code` | |
 | `course_offerings` | `id`, `course_code`, `semester` (`2026-27-W`), `teacher_id`, `capacity`, `enrolled_count`, `is_open` | `CHECK (enrolled_count BETWEEN 0 AND capacity)` |
 | `enrollments` | `id`, `student_id`, `offering_id`, `status` (`ENROLLED`, `CANCELLED`, `REJECTED`), `created_at`, `decided_by` | Unique `(student_id, offering_id)` |
-| `oauth_clients` | `client_id` (PK), `name`, `secret_hash` (Argon2id), `redirect_uris` (text[]), `post_logout_redirect_uris` (text[]), `scopes` (text[], `directory` only if granted), `registered_by`, `created_at` | |
-| `oauth_codes` | `code_hash` (PK), `client_id`, `user_id`, `redirect_uri`, `scope`, `nonce`, `code_challenge`, `auth_time`, `expires_at`, `redeemed_at`, `grant_id` | 60 s |
-| `oauth_grants` | `id`, `client_id`, `user_id`, `scope`, `access_jti`, `id_token_jti`, `revoked`, `created_at` | Used by `/userinfo`, logout `id_token_hint` and replay revocation. Kept for 24 hours |
-| `tower_sessions` | managed by tower-sessions-sqlx-store | The `__Host-UNICLOUD_SSO` cookie |
+| `oauth_clients` | `client_id` (PK), `name`, `secret_hash` (SHA-256: the secret has 256 random bits, so a slow hash adds nothing), `redirect_uris` (text[]), `post_logout_redirect_uris` (text[]), `directory_access`, `registered_by`, `created_at` | |
+| `oauth_codes` | `code_hash` (PK), `grant_id`, `redirect_uri`, `nonce`, `code_challenge`, `auth_time`, `expires_at`, `redeemed_at` | 60 s |
+| `oauth_grants` | `id`, `client_id`, `user_id`, `scope`, `session_id` (the `sid`), `access_jti`, `id_token_jti`, `revoked`, `created_at` | Used by `/userinfo`, logout `id_token_hint` and replay revocation. Kept for 24 hours |
+| `oauth_client_tokens` | `jti`, `client_id`, `expires_at` | Client-credentials tokens for the directory |
+| `tower_sessions.session` | managed by tower-sessions-sqlx-store, in its own schema | The `__Host-UNICLOUD_SSO` cookie |
 
 Permissions stay a bitmask in the database and a list of names on the wire. Bits 0 to 9 are unchanged. Bit 10 is `STUDENT_PROFILE_READ_FACULTY`.
 
@@ -99,7 +100,7 @@ Permissions stay a bitmask in the database and a list of names on the wire. Bits
 1. `GET /oauth2/authorize` validates in this order. Unknown `client_id`, or a callback not allowed by the policy: a plain 400 page, no redirect. Then `response_type=code`, scopes within the client's set, `code_challenge` present with `S256`: on failure, a redirect to the callback with `error` and `state`.
 2. With no session, the query is stored in the session and the browser goes to `/login?sso=1`.
 3. With a session, a random 32-byte code is created and only its SHA-256 is stored, with a 60 s expiry. Redirect to `redirect_uri?code=...&state=...`.
-4. `POST /oauth2/token`: HTTP Basic client auth (Argon2id check of the secret), then a conditional `UPDATE oauth_codes SET redeemed_at=now() WHERE code_hash=$1 AND redeemed_at IS NULL AND expires_at>now()`. If no row changes and the code exists, the grant created by the first exchange is revoked and the answer is `invalid_grant`. This keeps the Java guarantee across replicas without locks.
+4. `POST /oauth2/token`: HTTP Basic client auth (constant-time SHA-256 check of the secret), then a conditional `UPDATE oauth_codes SET redeemed_at=now() WHERE code_hash=$1 AND redeemed_at IS NULL AND expires_at>now()`. If no row changes and the code exists, the grant created by the first exchange is revoked and the answer is `invalid_grant`. This keeps the Java guarantee across replicas without locks.
 5. The `redirect_uri` and the PKCE verifier are checked. The user must still be enabled. Then the access token and ID token are signed, a grant row is written, and the JSON response is returned.
 
 ### client_credentials
@@ -138,25 +139,26 @@ The CHECK constraint is the last line of defence. The `enrollment_race` test fir
 |---|---|
 | `DATABASE_URL` | `postgres://...` |
 | `APP_ENV` | `production` or `staging`. `staging` turns on the staging tools and callback policy `any` |
-| `APP_ISSUER` | The public `https` origin, used as `iss`. Render sets it from `RENDER_EXTERNAL_URL` |
+| `APP_SSO_ISSUER` | The public `https` origin, used as `iss`. Falls back to Render's `RENDER_EXTERNAL_URL`, then to the request |
 | `APP_SIGNING_KEY_PEM` | The RSA private key (PKCS#8 PEM). The public key and `kid` are derived from it |
-| `APP_ALLOWED_CALLBACK_HOSTS` | Comma-separated host list for production. The default comes from `config/sso-callback-hosts.txt` in the image |
-| `APP_DB_POOL_MAX` | Default 10 |
+| `APP_SSO_ALLOWED_CALLBACK_HOSTS` | Comma-separated host list for production. The default comes from `config/sso-callback-hosts.txt`, compiled in |
+| `APP_DB_SCHEMA` | PostgreSQL schema for the tables. Staging uses `portal`, next to the Java tables it leaves alone |
+| `APP_DEMO_PASSWORD`, `APP_BOOTSTRAP_ADMIN_EMAIL`, `APP_BOOTSTRAP_ADMIN_PASSWORD` | Demo data (not in production) and the first admin |
+| `APP_DB_POOL_MAX` | Default 10 (5 on Render's free plan) |
 | `GIT_SHA`, `REPLICA_NAME` | `/health` and `X-Served-By` |
 
 ## Deployment
-- **Docker:** a cargo-chef planner, a dependency cook layer and a build layer on `rust:1-slim`, then `debian:bookworm-slim` with the binary, assets and CA certificates, as user `1000:1000`. `SQLX_OFFLINE=true`.
-- **Staging:** `render.yaml` keeps the service and database names, so the address and issuer stay the same. The environment variables change to the table above. The Blueprint syncs on push to the fork's `main`.
+- **Docker:** a cargo-chef planner, a dependency cook layer and a build layer on `rust:1-slim-bookworm`, then `debian:bookworm-slim` with the binary, assets and CA certificates, as user `1000:1000`. Queries are checked at run time by the tests, so the build needs no database and no `.sqlx` data. The image is about 144 MB.
+- **Start-up:** schema creation, migrations and the session table run under one PostgreSQL advisory lock, so replicas that start together do not race.
+- **Staging:** `render.yaml` keeps the service and database names, so the address and issuer stay the same. The environment variables change to the table above. The Blueprint syncs on push to the fork's `main`. `APP_SIGNING_KEY_PEM` must be set once on the service's Environment page.
 - **Production:** Azure Container Apps, 2 to 10 replicas, an HTTP concurrency scale rule, and Azure PostgreSQL Flexible Server B1ms. `infra/setup-azure.sh` and the `deploy` job move from MySQL to PostgreSQL. Deploys need reviewer approval, as today.
-- **CI:** `cargo fmt --check`, `cargo clippy -D warnings`, `cargo sqlx prepare --check`, then `cargo test` against a PostgreSQL 17 service, then the Docker build. The MySQL job is deleted.
+- **CI:** `cargo fmt --check`, `cargo clippy -D warnings`, then `cargo test` against a PostgreSQL 17 service, then the Docker build. The MySQL job is deleted. The Azure `deploy` job runs only in the team repository, which holds the Azure secrets.
 
 ## Testing
 - Unit: the RFC 7638 thumbprint against RFC 7638 section 3.1, the PKCE S256 check, callback policy matching (the cases from `SsoCallbackPolicyTests`), the permission bitmask.
-- Black-box suites run the binary against a real PostgreSQL through `reqwest`, with a cookie jar and no redirect following:
-  - `sso_conformance`: ported from `SsoFlowTests`, `SsoAnyCallbackTests` and `SsoSessionMaxAgeFilterTests`, plus every rule in `docs/sso-wire-contract.md`.
-  - `enrollment_race`.
-  - `directory`.
-  - `staging` (on and off).
+- Black-box suites run the real router on a random port against PostgreSQL through `reqwest`, with one cookie and no redirect following:
+  - `tests/sso_conformance.rs`: discovery, JWKS, the full login, claims by scope, plain-400 rules, errors sent to the callback, token errors, code replay, disabled users, logout, the directory API.
+  - `tests/portal.rs`: staging API shapes, staging absent in production, sign-in, CSRF, forced password change, permissions per page, the enrollment race (40 students, 10 places), health.
 - Golden recording: before cutover, record the Java staging's discovery document, JWKS shape, token response, decoded tokens and error bodies. The Rust suite asserts the same shapes. Differences are either fixed or written into `docs/sso.md`.
 - Load: `loadtest/spike.js`, updated to the new routes, against production.
 

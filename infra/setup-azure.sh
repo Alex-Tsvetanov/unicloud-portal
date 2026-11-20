@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time Azure setup for the UniCloud portal. Run it in Azure Cloud Shell (Bash).
-# Creates the resource group, the Container Apps environment, the MySQL database and an
+# Creates the resource group, the Container Apps environment, the PostgreSQL database and an
 # identity that GitHub Actions deploys with (OIDC, so no password is stored in GitHub).
 # The container app itself is created by the pipeline on its first run.
 # Safe to re-run: anything that already exists is left as it is.
@@ -10,21 +10,21 @@ set -euo pipefail
 GITHUB_REPO="your-github-username/unicloud-portal"  # owner/repo, exactly as in the GitHub URL
 LOCATION="germanywestcentral"   # Frankfurt. If Azure says this region isn't allowed for your
                                 # subscription, try polandcentral or swedencentral.
-MYSQL_LOCATION="$LOCATION"      # change only if MySQL isn't offered in LOCATION
+PG_LOCATION="$LOCATION"         # change only if PostgreSQL isn't offered in LOCATION
 RG="unicloud-rg"                # must match deploy.yml
 ENV_NAME="unicloud-env"         # must match deploy.yml
 IDENTITY="unicloud-github-deployer"
-MYSQL_ADMIN="unicloudadmin"
-MYSQL_DB="unicloud"
+PG_ADMIN="unicloudadmin"
+PG_DB="unicloud"
 # --------------------
 
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-MYSQL_SERVER="unicloud-mysql-${SUBSCRIPTION_ID:0:8}"   # unique across Azure, the same on every re-run
+PG_SERVER="unicloud-pg-${SUBSCRIPTION_ID:0:8}"   # unique across Azure, the same on every re-run
 echo "Using subscription: $(az account show --query name -o tsv)"
 
 echo "Registering resource providers (a few minutes the first time)..."
 az extension add --name containerapp --upgrade --only-show-errors
-for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.ManagedIdentity Microsoft.DBforMySQL; do
+for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.ManagedIdentity Microsoft.DBforPostgreSQL; do
   az provider register --namespace "$ns" --wait
 done
 
@@ -34,33 +34,25 @@ az group show --name "$RG" > /dev/null 2>&1 ||
 az containerapp env show --name "$ENV_NAME" --resource-group "$RG" > /dev/null 2>&1 ||
   az containerapp env create --name "$ENV_NAME" --resource-group "$RG" --location "$LOCATION" --output none
 
-echo "Creating the MySQL server $MYSQL_SERVER (5-10 minutes)..."
+echo "Creating the PostgreSQL server $PG_SERVER (5-10 minutes)..."
 DATABASE_URL=""
-if az mysql flexible-server show --name "$MYSQL_SERVER" --resource-group "$RG" > /dev/null 2>&1; then
+if az postgres flexible-server show --name "$PG_SERVER" --resource-group "$RG" > /dev/null 2>&1; then
   echo "  Already exists; keeping the password from the first run."
 else
   # Letters and digits only, so the password is safe inside a URL. The suffix guarantees
   # the upper-case, lower-case and digit characters Azure requires.
   RAW=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9')
-  MYSQL_PASSWORD="${RAW:0:20}Aa1"
-  # B1ms with 32 GB of storage matches the Azure for Students free offer. 8.4 is the
-  # LTS release; 8.0 is leaving Azure standard support and would cost extra.
+  PG_PASSWORD="${RAW:0:20}Aa1"
+  # B1ms with 32 GB of storage matches the Azure for Students free offer (ADR 0001: PostgreSQL only).
   # --public-access 0.0.0.0 lets services running in Azure (your container app) connect;
   # the password and TLS are still required.
-  az mysql flexible-server create \
-    --name "$MYSQL_SERVER" --resource-group "$RG" --location "$MYSQL_LOCATION" \
-    --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 8.4 \
-    --admin-user "$MYSQL_ADMIN" --admin-password "$MYSQL_PASSWORD" \
-    --public-access 0.0.0.0 --yes --output none
-  MYSQL_HOST=$(az mysql flexible-server show --name "$MYSQL_SERVER" --resource-group "$RG" \
-    --query fullyQualifiedDomainName -o tsv)
-  # A JDBC URL for Spring Boot, with the user and password included and TLS required
-  DATABASE_URL="jdbc:mysql://${MYSQL_HOST}:3306/${MYSQL_DB}?user=${MYSQL_ADMIN}&password=${MYSQL_PASSWORD}&sslMode=REQUIRED"
+  az postgres flexible-server create     --name "$PG_SERVER" --resource-group "$RG" --location "$PG_LOCATION"     --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 17     --admin-user "$PG_ADMIN" --admin-password "$PG_PASSWORD"     --public-access 0.0.0.0 --yes --output none
+  PG_HOST=$(az postgres flexible-server show --name "$PG_SERVER" --resource-group "$RG"     --query fullyQualifiedDomainName -o tsv)
+  # A PostgreSQL URL for the portal, with the user and password included and TLS required
+  DATABASE_URL="postgres://${PG_ADMIN}:${PG_PASSWORD}@${PG_HOST}:5432/${PG_DB}?sslmode=require"
 fi
-az mysql flexible-server db show --server-name "$MYSQL_SERVER" --resource-group "$RG" \
-    --database-name "$MYSQL_DB" > /dev/null 2>&1 ||
-  az mysql flexible-server db create --server-name "$MYSQL_SERVER" --resource-group "$RG" \
-    --database-name "$MYSQL_DB" --charset utf8mb4 --collation utf8mb4_0900_ai_ci --output none
+az postgres flexible-server db show --server-name "$PG_SERVER" --resource-group "$RG"     --database-name "$PG_DB" > /dev/null 2>&1 ||
+  az postgres flexible-server db create --server-name "$PG_SERVER" --resource-group "$RG"     --database-name "$PG_DB" --output none
 
 echo "Creating the identity GitHub Actions deploys with..."
 az identity create --name "$IDENTITY" --resource-group "$RG" --location "$LOCATION" --output none

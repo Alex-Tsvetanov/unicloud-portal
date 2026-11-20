@@ -1,5 +1,10 @@
 target/
 .git/
 .github/
+.claude/
 infra/
 loadtest/
+docs/
+openspec/
+tests/
+scripts/
