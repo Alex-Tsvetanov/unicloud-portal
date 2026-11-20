@@ -276,9 +276,11 @@ Grades and materials are not here: they belong to Team 3 and Team 2.
 
 ## Testing a module against staging
 
-A module team tests its own changes on its own machine against the portal's **staging** deployment.
+A module team tests its own changes on its own machine against the portal's **staging** deployment. No local copy of the portal is needed.
 
-**Staging address:** `https://unicloud-portal-staging-tszc.onrender.com`. It runs the new Rust portal: register your module and create your test users again, because the old registrations and users are not carried over. No local copy of the portal is needed. Staging has two things production does not:
+**Staging address:** `https://unicloud-portal-staging-tszc.onrender.com`. It runs the new Rust portal: register your module and create your test users again, because the old registrations and users are not carried over.
+
+Staging has two things production does not:
 
 - **Any callback URL works**, so the portal can send the browser back to `http://localhost:3000/...` on a developer's machine. The module's backend calls staging's `/oauth2/token` over the internet as usual.
 - **Staging tools**, with no login needed: a page at `https://unicloud-portal-staging-tszc.onrender.com/staging` and the same actions as an API. With them a team makes its own test users, with exactly the role and permissions it needs, and registers its module (with the `directory` grant if it needs it).
