@@ -26,6 +26,10 @@ The portal SHALL offer `/api/v1/portal/*` to its app. Every call SHALL use the s
 - **WHEN** a user who must change the first password calls the API
 - **THEN** the portal answers 403 with `error` = `password_change_required`
 
+#### Scenario: Change after the session ended
+- **WHEN** a browser whose session has ended posts an enrollment
+- **THEN** the portal answers 401 with `error` = `unauthenticated`
+
 #### Scenario: Missing CSRF header
 - **WHEN** a signed-in student posts an enrollment without the right `X-CSRF-Token`
 - **THEN** the portal answers 403 with `error` = `forbidden` and nothing changes
@@ -61,5 +65,5 @@ The portal SHALL serve `@unicloud/ui` as an npm tarball at `/ui/v1/unicloud-ui-<
 - **THEN** the answer carries `Access-Control-Allow-Origin: *`
 
 #### Scenario: Another team installs the package
-- **WHEN** a team runs `npm install https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz`
+- **WHEN** a team downloads `/ui/v1/unicloud-ui-1.0.0.tgz` and runs `npm install` on the file
 - **THEN** they get the components, their TypeScript types and the stylesheet

@@ -12,8 +12,12 @@ your own.
 The portal serves the package as an npm tarball. Replace `<portal>` with the portal's address.
 
 ```sh
-npm install https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz
+mkdir -p vendor
+curl -o vendor/unicloud-ui-1.0.0.tgz https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz
+npm install ./vendor/unicloud-ui-1.0.0.tgz
 ```
+
+Commit the file in `vendor/`. Your builds then never need the portal, and a sleeping staging server cannot break your CI. npm 12 and later refuse to install straight from a URL (`EALLOWREMOTE`); if you prefer that anyway, run `npm install --allow-remote=all https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz`.
 
 The package needs React 19 (`react` and `react-dom` are peer dependencies).
 

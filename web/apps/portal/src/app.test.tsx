@@ -158,6 +158,20 @@ describe("pages", () => {
     expect(headerOf(post?.[1], "X-CSRF-Token")).toBe("tok-123");
   });
 
+  it("reads the catalogue filter from the URL", async () => {
+    const fetchFn = mockFetch((url) => {
+      if (url.endsWith("/me")) return { status: 200, body: ME };
+      if (url.endsWith("/options")) return { status: 200, body: { faculties: [], specialties: [], semester: "2026-W" } };
+      return { status: 200, body: COURSES };
+    });
+    renderAt("/courses?q=CS1&faculty=FCST");
+    expect(await screen.findByRole("heading", { level: 3, name: "Програмиране" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox")).toHaveValue("CS1");
+    const call = fetchFn.mock.calls.map(([u]) => String(u)).find((u) => u.includes("/courses?"));
+    expect(call).toContain("q=CS1");
+    expect(call).toContain("faculty=FCST");
+  });
+
   it("redirects / to /home and renders a sign-out form with the CSRF field", async () => {
     mockFetch((url) => (url.endsWith("/me") ? { status: 200, body: ME } : { status: 200, body: [] }));
     const { container } = renderAt("/");

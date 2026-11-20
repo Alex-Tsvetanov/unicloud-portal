@@ -15,7 +15,7 @@ import {
   type Column,
   type FlashMessage,
 } from "@unicloud/ui";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, errorText, type Schemas } from "../api/client";
 import { keys } from "../api/hooks";
 import { QueryState } from "../components/QueryState";
@@ -29,15 +29,25 @@ const columns: Column<Schemas["ModuleSummary"]>[] = [
   { key: "created", header: "Създаден", render: (r) => r.created },
 ];
 
-/** The secret is shown once, right after registration, and is never stored by the page. */
+/**
+ * The secret is shown once, right after registration, and is never stored by the page.
+ * It is drawn next to the form and scrolled into view: the module list above can be long.
+ */
 function SecretOnce({ reg, onDone }: { reg: Schemas["ClientRegistered"]; onDone: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: "center" });
+    ref.current?.focus();
+  }, [reg.clientId]);
   return (
+    <div ref={ref} tabIndex={-1} style={{ marginTop: "1.4rem" }}>
     <Alert tone="info" onClose={onDone}>
       <p style={{ margin: "0 0 .5rem" }}>
         Модулът <strong>{reg.clientId}</strong> е регистриран. Запишете тайната сега. Тя няма да бъде показана отново.
       </p>
       <div className="uc-secret" aria-label="Тайна на клиента">{reg.clientSecret}</div>
     </Alert>
+    </div>
   );
 }
 
@@ -77,11 +87,11 @@ export function AdminModulesPage() {
   return (
     <>
       <PageHeader kicker="Администратор" title="Модули" lede="Регистрирайте модул на друг екип като OIDC клиент." />
-      {registered && <SecretOnce reg={registered} onDone={() => setRegistered(null)} />}
-      <Flash message={flash} onClose={() => setFlash(null)} />
       <QueryState query={query}>
         {(rows) => <DataTable columns={columns} rows={rows} rowKey={(r) => r.client_id} empty={<EmptyState title="Няма регистрирани модули" />} />}
       </QueryState>
+      {registered && <SecretOnce reg={registered} onDone={() => setRegistered(null)} />}
+      <Flash message={flash} onClose={() => setFlash(null)} />
       <Card title="Нов модул" style={{ marginTop: "1.4rem" }}>
         <form onSubmit={onSubmit}>
           <div className="uc-form-grid">

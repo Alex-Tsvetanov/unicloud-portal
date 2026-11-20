@@ -12,7 +12,7 @@ use serde_json::json;
 use tower_sessions::Session;
 
 use crate::crypto::ct_eq;
-use crate::web::session::KEY_CSRF;
+use crate::web::session::{KEY_CSRF, KEY_UID};
 
 const MAX_FORM_BYTES: usize = 64 * 1024;
 
@@ -26,12 +26,20 @@ pub async fn require_csrf(session: Session, req: Request, next: Next) -> Respons
     }
 }
 
-/// The JSON API: the token as the `X-CSRF-Token` header only; failures get a PortalError
+/// The JSON API: the token as the `X-CSRF-Token` header only; failures get a PortalError.
+/// A change sent after the session ended is 401 `unauthenticated`, so the app goes to sign-in.
 pub async fn require_csrf_api(session: Session, req: Request, next: Next) -> Response {
-    match check(&session, req, false).await {
+    let safe = matches!(*req.method(), Method::GET | Method::HEAD | Method::OPTIONS);
+    let signed_in = matches!(session.get::<i64>(KEY_UID).await, Ok(Some(_)));
+    let refused = if !safe && !signed_in {
+        Err((StatusCode::UNAUTHORIZED, "unauthenticated", "Влезте отново."))
+    } else {
+        check(&session, req, false).await.map_err(|s| (s, "forbidden", EXPIRED))
+    };
+    match refused {
         Ok(req) => next.run(req).await,
-        Err(status) => {
-            let mut res = (status, Json(json!({ "error": "forbidden", "message": EXPIRED }))).into_response();
+        Err((status, code, message)) => {
+            let mut res = (status, Json(json!({ "error": code, "message": message }))).into_response();
             res.headers_mut()
                 .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
             res

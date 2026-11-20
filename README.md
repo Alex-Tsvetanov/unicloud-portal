@@ -176,7 +176,7 @@ Old and new replicas run side by side for a minute during every deploy, so each 
 - **Check permissions, not roles.** Every handler asks `user.can(Permission::...)`.
 - **Every state-changing request carries the CSRF token.** The React app sends it as `X-CSRF-Token` (from `/api/v1/portal/me`); server-rendered forms send it as a hidden field.
 - **A change to `/api/v1/portal` also changes `api/openapi.json`, then run `npm run gen:api` in `web/` and commit `schema.d.ts`.** CI fails when the generated types are out of date.
-- **`@unicloud/ui` components only draw.** They take data as props and never call the portal, so other teams can use them with their own data. A breaking change needs a new version.
+- **`@unicloud/ui` components only draw.** They take data as props and never call the portal, so other teams can use them with their own data. Any change to the package needs a new version number: other teams' lockfiles pin the tarball's hash, so a published file must never change.
 - **A new or changed module-facing route also changes `api/openapi.json`.** `tests/api_docs.rs` fails otherwise.
 - **UI text is Bulgarian; code, logs and docs are English.**
 - **Never log a password, secret, token or code.**

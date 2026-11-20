@@ -14,7 +14,7 @@ The team chose React for the portal's UI so that the same components can be reus
 
 ## Distribution to other teams
 
-The portal serves the packed library itself: `npm install https://<portal>/ui/v1/unicloud-ui-<version>.tgz`. No npm registry or account is needed, and a version never changes once published. The same stylesheet is served at `/ui/v1/unicloud.css` for teams that do not use React (variant A of the UI-sharing proposal).
+The portal serves the packed library itself at `/ui/v1/unicloud-ui-<version>.tgz`. Teams download the file into their repository and run `npm install ./vendor/unicloud-ui-<version>.tgz`, so their builds never depend on the portal being awake (npm 12 also refuses URL installs unless `--allow-remote=all` is set). No npm registry or account is needed, and a version never changes once published. The same stylesheet is served at `/ui/v1/unicloud.css` for teams that do not use React (variant A of the UI-sharing proposal).
 
 ## Consequences
 

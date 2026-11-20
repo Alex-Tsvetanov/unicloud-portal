@@ -62,17 +62,27 @@ async fn every_role_works_through_the_api() {
 
     let spec = inspector.api_get("/options").await.json()["specialties"][0]["id"].as_i64().unwrap();
     let student_email = format!("{}@test.tu-sofia.bg", uniq("n"));
+    let fnum = uniq("FN").to_uppercase();
     let created = inspector
         .api(
             "POST",
             "/inspect/students",
-            Some(&json!({ "email": student_email, "first_name": "Нова", "last_name": "Студентка", "faculty_number": uniq("8"), "specialty_id": spec, "study_year": 1, "password": "first-password" })),
+            Some(&json!({ "email": student_email, "first_name": "Нова", "last_name": "Студентка", "faculty_number": fnum, "specialty_id": spec, "study_year": 1, "password": "first-password" })),
         )
         .await;
     assert_eq!(created.status, 201, "{}", created.text);
     let student_sub = created.json()["sub"].as_str().unwrap().to_string();
     let found = inspector.api_get(&format!("/inspect/students?q={student_email}")).await.json();
     assert_eq!(found[0]["sub"], student_sub.as_str());
+    let by_number = inspector
+        .api_get(&format!("/inspect/students?q={}", fnum.to_lowercase()))
+        .await
+        .json();
+    assert_eq!(
+        by_number[0]["sub"],
+        student_sub.as_str(),
+        "a faculty number with letters matches in any case"
+    );
 
     // The new student must change the first password before using the API
     let student = signed_in(&p, &student_email, "first-password").await;
@@ -222,6 +232,12 @@ async fn sign_in_returns_to_the_asked_app_page_only() {
     let b = Browser::new(&p.base);
     let (_, email, pw) = staging_student(&b).await;
     assert_eq!(b.me().await.status, 401, "JSON, not a redirect");
+    let write = b.api_with_csrf("POST", "/courses/1/enroll", None, "any").await;
+    assert_eq!(
+        (write.status, write.json()["error"].as_str()),
+        (401, Some("unauthenticated")),
+        "a change after the session ended"
+    );
 
     let page = b.get("/login?next=/app/courses").await;
     assert!(page.text.contains(r#"name="next" value="/app/courses""#));

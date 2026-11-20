@@ -19,14 +19,14 @@ A student's faculty SHALL be the faculty of the student's specialty. Teachers, d
 - **THEN** the student's profile and claims show faculty FCST
 
 ### Requirement: Own profile page
-A signed-in user SHALL see their own profile at `/profile`: names, email, role in Bulgarian, faculty, and for a student the academic record with the status in Bulgarian (действащ, прекъснал, дипломиран).
+A signed-in user SHALL see their own profile at `/app/profile`: names, email, role in Bulgarian, faculty, and for a student the academic record with the status in Bulgarian (действащ, прекъснал, дипломиран).
 
 #### Scenario: Student opens profile
-- **WHEN** a student opens `/profile`
+- **WHEN** a student opens `/app/profile`
 - **THEN** the page shows faculty number, specialty, study year, status and faculty
 
 #### Scenario: Teacher opens profile
-- **WHEN** a teacher opens `/profile`
+- **WHEN** a teacher opens `/app/profile`
 - **THEN** the page shows names, email, role and faculty, and no academic record
 
 ### Requirement: Reading other students' profiles

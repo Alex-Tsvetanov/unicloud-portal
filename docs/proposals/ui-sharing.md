@@ -65,8 +65,12 @@ model.addAttribute("studentCard", card);
 The portal publishes its own React components as an npm package. They only draw; they get their data from you (from the ID token claims or from the directory API your backend already calls). No cookies, no tokens in the browser. No npm account or registry is needed: the portal serves the package file.
 
 ```sh
-npm install https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz
+mkdir -p vendor
+curl -o vendor/unicloud-ui-1.0.0.tgz https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz
+npm install ./vendor/unicloud-ui-1.0.0.tgz
 ```
+
+Commit the file in `vendor/`. Your builds then never need the portal, and a sleeping staging server cannot break your CI. npm 12 and later refuse to install straight from a URL (`EALLOWREMOTE`); if you prefer that anyway, run `npm install --allow-remote=all https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz`.
 
 ```tsx
 import "@unicloud/ui/unicloud.css";

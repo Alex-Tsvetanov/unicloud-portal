@@ -34,11 +34,11 @@ A course offering SHALL be one course in one semester (for example `2026-27-W`),
 - **THEN** the portal refuses the change
 
 ### Requirement: Catalogue page
-A user with `COURSE_OFFERING_READ` SHALL see the catalogue of open offerings for the current semester at `/courses`, with course code, title, ECTS, teacher and free places. Filtering by faculty and searching by code or title SHALL update the list through an htmx fragment, without a full page load.
+A user with `COURSE_OFFERING_READ` SHALL see the catalogue of open offerings for the current semester at `/app/courses`, with course code, title, ECTS, teacher and free places. Filtering by faculty and searching by code or title SHALL update the list without a full page load.
 
 #### Scenario: Filter by faculty
 - **WHEN** a student picks FCST in the faculty filter
-- **THEN** the portal returns only the list fragment with FCST offerings
+- **THEN** the list shows only FCST offerings
 - **AND** the page URL reflects the filter so it can be shared
 
 #### Scenario: Free places
@@ -49,5 +49,5 @@ A user with `COURSE_OFFERING_READ` SHALL see the catalogue of open offerings for
 Users with `COURSE_CREATE_MODIFY` or `COURSE_OFFERING_CREATE_MODIFY` SHALL manage courses and offerings from portal pages. These controls MUST NOT appear for users without the permission.
 
 #### Scenario: Student view
-- **WHEN** a student opens `/courses`
+- **WHEN** a student opens `/app/courses`
 - **THEN** there are no create or edit controls on the page

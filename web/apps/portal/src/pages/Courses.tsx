@@ -11,6 +11,7 @@ import {
   type FlashMessage,
 } from "@unicloud/ui";
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { api, errorText, type Schemas } from "../api/client";
 import { keys, useDebounced, useOptions } from "../api/hooks";
 import { QueryState } from "../components/QueryState";
@@ -23,8 +24,20 @@ function enrollFlash(r: Schemas["EnrollResult"]): FlashMessage {
 }
 
 export function CoursesPage() {
-  const [q, setQ] = useState("");
-  const [faculty, setFaculty] = useState("");
+  // The filter lives in the URL, so a filtered catalogue can be shared and survives a reload
+  const [params, setParams] = useSearchParams();
+  const q = params.get("q") ?? "";
+  const faculty = params.get("faculty") ?? "";
+  const setFilter = (key: "q" | "faculty", value: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
   const [flash, setFlash] = useState<FlashMessage | null>(null);
   const debouncedQ = useDebounced(q.trim(), SEARCH_DELAY_MS);
   const qc = useQueryClient();
@@ -60,10 +73,10 @@ export function CoursesPage() {
       />
       <div className="uc-row" style={{ alignItems: "flex-end" }} role="search">
         <Field label="Търсене" className="uc-grow">
-          <TextInput type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="напр. CS101" />
+          <TextInput type="search" value={q} onChange={(e) => setFilter("q", e.target.value)} placeholder="напр. CS101" />
         </Field>
         <Field label="Факултет">
-          <Select value={faculty} onChange={(e) => setFaculty(e.target.value)} options={facultyOptions} />
+          <Select value={faculty} onChange={(e) => setFilter("faculty", e.target.value)} options={facultyOptions} />
         </Field>
       </div>
       <Flash message={flash} onClose={() => setFlash(null)} />

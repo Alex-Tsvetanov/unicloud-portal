@@ -134,7 +134,7 @@ Scope `email` SHALL give `email`. Scope `profile` SHALL give `given_name`, `fami
 The access token SHALL be an RS256 JWT with `iss`, `sub`, `aud` (the client id as a JSON string), `client_id`, `scope`, `iat`, `exp` (30 minutes) and `jti`. It SHALL work only at `/userinfo` (authorization-code tokens) or at the directory API (client-credentials tokens with scope `directory`).
 
 #### Scenario: Token on a portal page
-- **WHEN** a module sends its access token as Bearer to `/profile`
+- **WHEN** a module sends its access token as Bearer to `/api/v1/portal/profile`
 - **THEN** the portal treats the request as anonymous
 
 ### Requirement: Userinfo

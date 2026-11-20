@@ -376,7 +376,7 @@ Configure each environment separately: the issuer, client id and secret all diff
 
 ## Registering a module (portal admins)
 
-A portal admin registers each module once, on the portal page **Модули** (`/admin/modules`):
+A portal admin registers each module once, on the portal page **Модули** (`/app/admin/modules`):
 
 1. Sign in as an admin and open **Модули**.
 2. Fill in the client id, a name, the callback URLs (one per line) and, if used, the logout URLs. Tick the directory box if the module's backend needs [the directory API](#the-directory-api).

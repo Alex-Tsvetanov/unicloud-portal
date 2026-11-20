@@ -42,7 +42,7 @@ pub async fn students(State(st): State<AppState>, u: ApiUser, Query(f): Query<St
         "SELECT u.id::text AS sub, u.first_name || ' ' || u.last_name AS name, u.email, r.faculty_number,
                 s.faculty_code || ' · ' || s.name AS specialty, r.study_year, r.status
          FROM academic_records r JOIN users u ON u.id = r.user_id JOIN specialties s ON s.id = r.specialty_id
-         WHERE $1 = '%%' OR lower(u.first_name || ' ' || u.last_name) LIKE $1 OR r.faculty_number LIKE $1 OR lower(u.email) LIKE $1
+         WHERE $1 = '%%' OR lower(u.first_name || ' ' || u.last_name) LIKE $1 OR lower(r.faculty_number) LIKE $1 OR lower(u.email) LIKE $1
          ORDER BY u.last_name, u.first_name LIMIT $2",
     )
     .bind(like)

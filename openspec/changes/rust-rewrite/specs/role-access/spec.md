@@ -43,7 +43,7 @@ The portal navigation and pages SHALL show only what the user's permissions allo
 - **THEN** the navigation has no links to staff, module or course management
 
 #### Scenario: Direct URL without permission
-- **WHEN** a student opens `/admin/modules` directly
+- **WHEN** a student calls `/api/v1/portal/admin/modules` directly
 - **THEN** the portal answers 403
 
 ### Requirement: Unknown roles in modules
