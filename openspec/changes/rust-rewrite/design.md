@@ -1,6 +1,6 @@
 # Design: UniCloud Portal in Rust
 
-Status: built on branch `rust-rewrite` (2026-11-20). Requirements: [docs/prd.md](../../../docs/prd.md). Decisions: [ADR 0001](../../../docs/adr/0001-rust-rewrite-with-hypermedia-ui.md), [0002](../../../docs/adr/0002-grow-the-sso-contract.md), [0003](../../../docs/adr/0003-one-cookie-session.md). Wire contract to keep: [docs/sso-wire-contract.md](../../../docs/sso-wire-contract.md).
+Status: built on branch `rust-rewrite` (2026-11-20). Requirements: [docs/prd.md](../../../docs/prd.md). Decisions: [ADR 0001](../../../docs/adr/0001-rust-rewrite-with-hypermedia-ui.md), [0002](../../../docs/adr/0002-grow-the-sso-contract.md), [0003](../../../docs/adr/0003-one-cookie-session.md), [0004](../../../docs/adr/0004-react-ui-with-a-json-api.md) (the UI is now React; see the `react-ui` change). Wire contract to keep: [docs/sso-wire-contract.md](../../../docs/sso-wire-contract.md).
 
 ## Context
 The Java portal works and has a published SSO contract (`docs/sso.md`). Module teams already code against it. The rebuild must replace the internals without the modules noticing, except that they must register again. It must also add deans, faculties and a directory API, run on free plans, and survive the 08:00 rush on 2 or more replicas.
@@ -13,10 +13,10 @@ The Java portal works and has a published SSO contract (`docs/sso.md`). Module t
 
 ```mermaid
 flowchart LR
-    B[Browser] -->|HTML + htmx, cookie| P
+    B[Browser: React app] -->|JSON /api/v1/portal, cookie| P
     M[Module backend] -->|/oauth2/token, /userinfo, /api/v1/directory| P
     subgraph P[Portal replica x N]
-      R[axum router] --> UI[ui: Maud pages and fragments]
+      R[axum router] --> UI[portal_api: JSON for the app; ui: sign-in pages]
       R --> OP[oidc: provider endpoints]
       R --> DIR[directory: module read API]
       R --> ST[staging: tools, staging profile only]
@@ -127,11 +127,11 @@ The CHECK constraint is the last line of defence. The `enrollment_race` test fir
 | `GET /api/v1/directory/faculties/{code}/students` | the faculty's students |
 
 ## UI
-- Maud functions are the components. `layout(title, user, body)` wraps full pages. An htmx request (`HX-Request: true`) gets only the fragment. The same handler serves both.
-- Pages: `/login`, `/password`, `/` (role home), `/profile`, `/offerings` (search and enroll in place), `/my/enrollments`, `/teach` (teacher: offerings, students, reject), `/faculty` (dean), `/admin/users`, `/admin/modules` (module registration, secret shown once), `/inspect/students`, `/inspect/courses`, `/staging` (staging only).
-- The navigation shows only what the user's permissions allow. The server checks again on every request.
-- CSRF: a session token in a `<meta>` tag, sent by htmx as `X-CSRF-Token` (configured once in the layout), and as a hidden field in plain forms.
-- Without JavaScript every page still works as plain forms and links.
+Replaced by the `react-ui` change ([design](../react-ui/design.md), [ADR 0004](../../../docs/adr/0004-react-ui-with-a-json-api.md)). In short:
+- The React app at `/app` draws every page from `/api/v1/portal/*` JSON. Its components come from `@unicloud/ui`.
+- Server-rendered with Maud: `/login`, `/password`, the logout confirmation, error pages and `/staging`.
+- The navigation (from `/api/v1/portal/me`) shows only what the user's permissions allow. The server checks again on every call.
+- CSRF: the session token comes with `/api/v1/portal/me` and goes back as `X-CSRF-Token`; server-rendered forms send it as a hidden field.
 
 ## Configuration
 

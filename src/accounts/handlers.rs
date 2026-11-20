@@ -10,6 +10,7 @@ use tower_sessions::Session;
 
 use super::{password, throttle};
 use crate::error::{AppError, AppResult};
+use crate::spa::APP_HOME;
 use crate::state::AppState;
 use crate::ui::components::{csrf_field, field, flash, layout};
 use crate::web::session::{CurrentUser, KEY_PENDING_AUTHORIZE, csrf_token, session_user, sign_in};
@@ -17,25 +18,35 @@ use crate::web::session::{CurrentUser, KEY_PENDING_AUTHORIZE, csrf_token, sessio
 #[derive(Deserialize, Default)]
 pub struct LoginQuery {
     pub sso: Option<String>,
+    /// Where in the app to return after sign-in (`/app/...` only)
+    pub next: Option<String>,
 }
 
 #[derive(Deserialize)]
 pub struct LoginForm {
     pub email: String,
     pub password: String,
+    #[serde(default)]
+    pub next: Option<String>,
 }
 
 const BAD_LOGIN: &str = "Грешен имейл или парола.";
 
 pub async fn login_page(State(st): State<AppState>, session: Session, Query(q): Query<LoginQuery>) -> AppResult<Response> {
     if session_user(&st, &session).await?.is_some() {
-        return Ok(Redirect::to(&after_login_target(&session).await?).into_response());
+        return Ok(Redirect::to(&after_login_target(&session, q.next.as_deref()).await?).into_response());
     }
     let csrf = csrf_token(&session).await?;
-    Ok(login_view(&csrf, None, "", q.sso.is_some()).into_response())
+    let next = app_path(q.next.as_deref());
+    Ok(login_view(&csrf, None, "", q.sso.is_some(), next).into_response())
 }
 
-fn login_view(csrf: &str, error: Option<&str>, email: &str, sso: bool) -> Markup {
+/// An in-app return path, or nothing. Never another site: no scheme, no `//`, no backslash.
+fn app_path(next: Option<&str>) -> Option<&str> {
+    next.filter(|n| n.starts_with(APP_HOME) && !n.contains("//") && !n.contains('\\') && n.len() <= 512)
+}
+
+fn login_view(csrf: &str, error: Option<&str>, email: &str, sso: bool, next: Option<&str>) -> Markup {
     layout(
         "Вход",
         None,
@@ -47,6 +58,7 @@ fn login_view(csrf: &str, error: Option<&str>, email: &str, sso: bool) -> Markup
                 @if let Some(e) = error { (flash("error", e)) }
                 form method="post" action="/login" hx-boost="false" {
                     (csrf_field(csrf))
+                    @if let Some(n) = next { input type="hidden" name="next" value=(n); }
                     (field("Имейл", "email", "email", email, true))
                     (field("Парола", "password", "password", "", true))
                     button.primary type="submit" { "Вход" }
@@ -64,7 +76,7 @@ pub async fn login_submit(State(st): State<AppState>, session: Session, Form(f):
         let msg = "Твърде много неуспешни опити. Опитайте отново след 15 минути.";
         return Ok((
             axum::http::StatusCode::TOO_MANY_REQUESTS,
-            login_view(&csrf, Some(msg), &email, false),
+            login_view(&csrf, Some(msg), &email, false, app_path(f.next.as_deref())),
         )
             .into_response());
     }
@@ -85,22 +97,23 @@ pub async fn login_submit(State(st): State<AppState>, session: Session, Form(f):
         let csrf = csrf_token(&session).await?;
         return Ok((
             axum::http::StatusCode::UNAUTHORIZED,
-            login_view(&csrf, Some(BAD_LOGIN), &email, false),
+            login_view(&csrf, Some(BAD_LOGIN), &email, false, app_path(f.next.as_deref())),
         )
             .into_response());
     };
     throttle::clear(&email);
     sign_in(&session, user_id).await?;
     tracing::info!(user_id, "signed in");
-    Ok(Redirect::to(&after_login_target(&session).await?).into_response())
+    Ok(Redirect::to(&after_login_target(&session, f.next.as_deref()).await?).into_response())
 }
 
-/// The waiting SSO login, if one is stored, or the home page
-async fn after_login_target(session: &Session) -> AppResult<String> {
+/// The waiting SSO login, if one is stored; else the asked-for app page; else the app's start
+async fn after_login_target(session: &Session, next: Option<&str>) -> AppResult<String> {
     let pending: Option<String> = session.remove(KEY_PENDING_AUTHORIZE).await.map_err(anyhow::Error::from)?;
     Ok(pending
         .filter(|p| p.starts_with("/oauth2/authorize?"))
-        .unwrap_or_else(|| "/".into()))
+        .or_else(|| app_path(next).map(String::from))
+        .unwrap_or_else(|| APP_HOME.into()))
 }
 
 pub async fn logout(State(st): State<AppState>, session: Session) -> AppResult<Response> {
@@ -174,7 +187,7 @@ pub async fn password_submit(
         .bind(cu.user.id)
         .execute(&st.db)
         .await?;
-    let target = after_login_target(&cu.session).await?;
+    let target = after_login_target(&cu.session, None).await?;
     Ok(crate::web::redirect(&headers, &target))
 }
 

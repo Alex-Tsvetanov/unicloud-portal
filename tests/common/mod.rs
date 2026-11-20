@@ -299,3 +299,49 @@ pub async fn login_and_exchange(b: &Browser, client: &str, secret: &str, email: 
     assert_eq!(t.status, 200, "{}", t.text);
     t.json()
 }
+
+/// Creates a staff member through the staging API: (id, email, password)
+pub async fn staging_staff(b: &Browser, role: &str, faculty: Option<&str>) -> (i64, String, String) {
+    let email = format!("{}@test.tu-sofia.bg", uniq("p"));
+    let pw = "a-long-password".to_string();
+    let mut body = json!({ "email": email, "password": pw, "firstName": "Тест", "lastName": role, "role": role });
+    if let Some(f) = faculty {
+        body["faculty"] = json!(f);
+    }
+    let r = b.post_json("/api/v1/staging/users", &body).await;
+    assert_eq!(r.status, 201, "{}", r.text);
+    (r.json()["id"].as_i64().unwrap(), email, pw)
+}
+
+impl Browser {
+    /// The React app's view of the session (`GET /api/v1/portal/me`)
+    pub async fn me(&self) -> Resp {
+        self.get_with("/api/v1/portal/me", &[("accept", "application/json")]).await
+    }
+
+    /// A portal API call that changes something: sends the session's CSRF token as the app does
+    pub async fn api(&self, method: &str, path: &str, body: Option<&Value>) -> Resp {
+        let csrf = self.me().await.json()["csrf"].as_str().unwrap_or_default().to_string();
+        self.api_with_csrf(method, path, body, &csrf).await
+    }
+
+    pub async fn api_with_csrf(&self, method: &str, path: &str, body: Option<&Value>, csrf: &str) -> Resp {
+        let url = self.url(&format!("/api/v1/portal{path}"));
+        let rb = match method {
+            "POST" => self.http.post(url),
+            "PUT" => self.http.put(url),
+            other => panic!("unexpected method {other}"),
+        };
+        let rb = rb.header("x-csrf-token", csrf);
+        let rb = match body {
+            Some(b) => rb.json(b),
+            None => rb,
+        };
+        self.send(rb).await
+    }
+
+    pub async fn api_get(&self, path: &str) -> Resp {
+        self.get_with(&format!("/api/v1/portal{path}"), &[("accept", "application/json")])
+            .await
+    }
+}

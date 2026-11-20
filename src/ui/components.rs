@@ -7,7 +7,6 @@ use maud::{DOCTYPE, Markup, PreEscaped, html};
 pub struct NavUser<'a> {
     pub name: String,
     pub role_label: &'a str,
-    pub links: Vec<(&'static str, &'static str)>,
     pub csrf: &'a str,
 }
 
@@ -26,11 +25,9 @@ pub fn layout(title: &str, user: Option<&NavUser>, body: Markup) -> Markup {
             }
             body hx-boost="true" {
                 header.topbar {
-                    a.brand href="/" { span.brand-mark { "U" } "UniCloud" }
+                    a.brand href="/app/" { span.brand-mark { "U" } "UniCloud" }
                     @if let Some(u) = user {
-                        nav aria-label="Основна навигация" {
-                            @for (href, label) in &u.links { a href=(href) { (label) } }
-                        }
+                        nav aria-label="Основна навигация" { a href="/app/" { "Към портала" } }
                         div.who {
                             span.who-name { (u.name) }
                             span.badge { (u.role_label) }

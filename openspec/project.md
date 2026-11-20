@@ -9,14 +9,14 @@ Vocabulary: [GLOSSARY.md](../GLOSSARY.md). Decisions: [docs/adr](../docs/adr/). 
 - Rust (stable), axum 0.8, tower-http, tower-sessions with a PostgreSQL store
 - sqlx 0.9 on PostgreSQL 17, migrations embedded and applied at start under an advisory lock; queries checked at run time by the tests
 - jsonwebtoken 12 (pure Rust backend) for RS256, argon2 for passwords, SHA-256 for client secrets
-- Maud components and htmx 2.0.x, served from the binary, no JavaScript build
-- Tests: cargo test; black-box suites start the real router on a random port and drive it with reqwest against PostgreSQL
+- React 19, TypeScript, Vite, React Router and TanStack Query for the UI (`web/apps/portal`, served at `/app`); `@unicloud/ui` for the shared components (`web/packages/ui`, served at `/ui/v1/`). Maud only for sign-in, password, logout confirmation, errors and the staging page
+- Tests: cargo test; Vitest with Testing Library for the frontend; black-box suites start the real router on a random port and drive it with reqwest against PostgreSQL
 - Docker (cargo-chef, slim glibc base). Staging on Render (Blueprint `render.yaml`). Production on Azure Container Apps
 
 ## Conventions
 - UI text is Bulgarian. Code, API, logs and docs are English. Wire names use US spelling ("enrollment").
 - Published names in `docs/sso.md` never change. The contract only grows.
-- Every state-changing form has CSRF protection. Every handler checks a permission, not a role.
+- Every state-changing request has CSRF protection (`X-CSRF-Token` from the app, a form field on server pages). Every handler checks a permission, not a role.
 - Docs follow the writing rules: short sentences, plain words, no em or en dashes.
 - Conventional commits. One branch per change, merged to `main` by pull request.
 

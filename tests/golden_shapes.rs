@@ -144,6 +144,6 @@ async fn reading_a_page_moves_the_idle_timeout() {
     };
     let before = expiry().await;
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-    assert_eq!(b.get("/profile").await.status, 200);
-    assert!(expiry().await > before, "a read-only page view extends the session");
+    assert_eq!(b.me().await.status, 200);
+    assert!(expiry().await > before, "a read-only API call extends the session");
 }

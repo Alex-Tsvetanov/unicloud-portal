@@ -95,7 +95,6 @@ impl CurrentUser {
         NavUser {
             name: self.user.full_name(),
             role_label: self.user.role.label_bg(),
-            links: crate::ui::nav_links(&self.user),
             csrf: &self.csrf,
         }
     }

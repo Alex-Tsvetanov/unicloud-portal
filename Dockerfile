@@ -1,5 +1,15 @@
 # UniCloud Portal (Rust). cargo-chef caches the dependency build in its own layer, so a code change
 # rebuilds only the portal itself. Migrations and the SQL are compiled in; no database at build time.
+# A Node stage builds the React app (served at /app) and packs @unicloud/ui (served at /ui/v1).
+
+FROM node:22-bookworm-slim AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+COPY web/packages/ui/package.json packages/ui/
+COPY web/apps/portal/package.json apps/portal/
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build && npm run pack:ui && cp packages/ui/dist/unicloud.css dist-ui/unicloud.css
 
 FROM rust:1-slim-bookworm AS chef
 RUN cargo install cargo-chef --locked --version 0.1.78
@@ -25,9 +35,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=build /src/target/release/unicloud-portal /app/unicloud-portal
 COPY assets/ /app/assets/
+COPY --from=web /src/web/apps/portal/dist/ /app/web/
+COPY --from=web /src/web/dist-ui/ /app/ui/
 ARG GIT_SHA=dev
 ENV GIT_SHA=$GIT_SHA \
-    APP_ASSETS_DIR=/app/assets \
+    APP_ASSETS_DIR=/app/assets     APP_WEB_DIR=/app/web     APP_UI_DIR=/app/ui \
     PORT=8080 \
     RUST_LOG=info,sqlx=warn
 EXPOSE 8080

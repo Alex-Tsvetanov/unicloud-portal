@@ -76,7 +76,7 @@ async fn staging_api_keeps_the_java_shapes() {
     // Staging users sign in without a forced password change
     let (_, email, pw) = staging_student(&b).await;
     let s = b.sign_in(&email, &pw).await;
-    assert_eq!(s.location(), "/");
+    assert_eq!(s.location(), "/app/");
 }
 
 #[tokio::test]
@@ -130,7 +130,9 @@ async fn sign_in_csrf_and_forced_password_change() {
     assert!(wrong.text.contains("Грешен имейл или парола"));
 
     b.sign_in(&email, "first-password").await;
-    assert_eq!(b.get("/profile").await.location(), "/password");
+    let blocked = b.me().await;
+    assert_eq!(blocked.status, 403);
+    assert_eq!(blocked.json()["error"], "password_change_required");
     let (client, _) = staging_client(&b, false).await;
     assert_eq!(
         b.get(&authorize_url(&client, "openid", &pkce(), &[])).await.location(),
@@ -166,27 +168,37 @@ async fn sign_in_csrf_and_forced_password_change() {
         "continues the waiting SSO login: {}",
         changed.location()
     );
-    assert_eq!(b.get("/profile").await.status, 200);
+    assert_eq!(b.me().await.status, 200);
 
     // Sign-out ends the session
-    let csrf = csrf_from(&b.get("/profile").await.text);
+    let csrf = b.me().await.json()["csrf"].as_str().unwrap().to_string();
     b.post_form("/logout", &[("csrf", &csrf)]).await;
-    assert_eq!(b.get("/profile").await.location(), "/login");
+    let gone = b.me().await;
+    assert_eq!(gone.status, 401);
+    assert_eq!(gone.json()["error"], "unauthenticated");
 }
 
 #[tokio::test]
-async fn permissions_decide_pages() {
+async fn permissions_decide_api_calls() {
     let p = start(Environment::Staging, &[]).await;
     let b = Browser::new(&p.base);
     let (_, email, pw) = staging_student(&b).await;
     b.sign_in(&email, &pw).await;
-    assert_eq!(b.get("/courses").await.status, 200);
-    assert_eq!(b.get("/admin/users").await.status, 403);
-    assert_eq!(b.get("/inspect/students").await.status, 403);
-    assert_eq!(b.get("/admin/modules").await.status, 403);
+    assert_eq!(b.api_get("/courses").await.status, 200);
+    for path in [
+        "/admin/staff",
+        "/inspect/students",
+        "/admin/modules",
+        "/teach/offerings",
+        "/faculty",
+    ] {
+        let r = b.api_get(path).await;
+        assert_eq!(r.status, 403, "{path}");
+        assert_eq!(r.json()["error"], "forbidden", "{path}");
+    }
     let other = staging_student(&Browser::new(&p.base)).await.0;
     assert_eq!(
-        b.get(&format!("/students/{other}")).await.status,
+        b.api_get(&format!("/students/{other}")).await.status,
         404,
         "another student's profile is hidden"
     );

@@ -14,7 +14,9 @@ pub mod enrollment;
 pub mod error;
 pub mod oidc;
 pub mod ops;
+pub mod portal_api;
 pub mod seed;
+pub mod spa;
 pub mod staging;
 pub mod state;
 pub mod ui;
@@ -97,8 +99,13 @@ pub async fn build_app(st: AppState) -> anyhow::Result<Router> {
         // Every request moves the idle timeout ("30 minutes without use"), not only requests that write
         .with_always_save(true);
 
-    // Pages: cookie session plus CSRF on every state change
+    // Server-rendered pages: cookie session plus CSRF on every state change
     let ui = ui_routes().layer(middleware::from_fn(web::csrf::require_csrf));
+    // The React app's JSON API: the same cookie and CSRF token, sent as a header
+    let portal = Router::new().nest(
+        "/api/v1/portal",
+        portal_api::routes().layer(middleware::from_fn(web::csrf::require_csrf_api)),
+    );
 
     // Machine endpoints: no CSRF (they use client authentication or Bearer tokens)
     let machine = Router::new()
@@ -113,7 +120,12 @@ pub async fn build_app(st: AppState) -> anyhow::Result<Router> {
         .route("/connect/logout", get(oidc::logout::logout))
         .nest("/api/v1/directory", directory::routes());
 
-    let mut app = Router::new().merge(ui).merge(machine);
+    let mut app = Router::new()
+        .merge(ui)
+        .merge(portal)
+        .merge(machine)
+        .merge(spa::app_routes())
+        .merge(spa::library_routes());
     if st.cfg.staging_tools() {
         app = app.merge(staging::routes());
     }
@@ -127,34 +139,12 @@ pub async fn build_app(st: AppState) -> anyhow::Result<Router> {
 }
 
 fn ui_routes() -> Router<AppState> {
-    use accounts::{admin, handlers as acc};
+    use accounts::handlers as acc;
     Router::new()
-        .route("/", get(ui::pages::home))
-        .route("/home", get(ui::pages::dashboard))
+        .route("/", get(spa::root))
         .route("/login", get(acc::login_page).post(acc::login_submit))
         .route("/logout", post(acc::logout))
         .route("/password", get(acc::password_page).post(acc::password_submit))
-        .route("/profile", get(ui::pages::profile))
-        .route("/students/{id}", get(ui::teach::student_profile))
-        .route("/courses", get(ui::catalog::courses))
-        .route("/courses/{id}/enroll", post(ui::catalog::enroll))
-        .route("/enrollments", get(ui::catalog::my_enrollments))
-        .route("/enrollments/{id}/cancel", post(ui::catalog::cancel))
-        .route("/teach", get(ui::teach::teach))
-        .route("/teach/offerings/{id}", get(ui::teach::offering_students))
-        .route("/teach/enrollments/{id}/reject", post(ui::teach::reject))
-        .route("/faculty", get(ui::teach::faculty))
-        .route("/inspect/students", get(ui::inspect::students).post(ui::inspect::create_student))
-        .route("/inspect/students/{id}/status", post(ui::inspect::set_status))
-        .route("/inspect/courses", get(ui::inspect::courses).post(ui::inspect::create_course))
-        .route("/inspect/offerings", post(ui::inspect::create_offering))
-        .route("/inspect/offerings/{id}/toggle", post(ui::inspect::toggle_offering))
-        .route("/admin/users", get(admin::staff_page).post(admin::staff_create))
-        .route("/admin/users/{id}/toggle", post(admin::staff_toggle))
-        .route(
-            "/admin/modules",
-            get(oidc::clients::modules_page).post(oidc::clients::modules_create),
-        )
 }
 
 fn assets_dir() -> std::path::PathBuf {

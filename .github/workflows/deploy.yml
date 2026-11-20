@@ -48,8 +48,32 @@ jobs:
       - name: Test (unit, SSO conformance, portal, enrollment race)
         run: cargo test --locked
 
+  web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Types match api/openapi.json
+        run: npm run gen:api && git diff --exit-code apps/portal/src/api/schema.d.ts
+      - name: Type check
+        run: npm run typecheck
+      - name: Test (components and app)
+        run: npm test
+      - name: Build (app and package)
+        run: npm run build && npm run pack:ui
+
   build:
-    needs: test
+    needs: [test, web]
     runs-on: ubuntu-latest
     permissions:
       contents: read

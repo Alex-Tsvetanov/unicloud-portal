@@ -1,6 +1,6 @@
 # Proposal: sharing the portal's UI with the other UniCloud modules
 
-Status: proposal for Teams 2 to 5 (2026-11-20). From Team 1, "Portal and Identity".
+Status: proposal for Teams 2 to 5 (2026-11-20, updated 2026-11-21). From Team 1, "Portal and Identity". Variants A and C are now built and served from the portal ([ADR 0004](../adr/0004-react-ui-with-a-json-api.md)).
 
 ## Why
 
@@ -8,7 +8,7 @@ Students move between the portal and your modules all day. If every module looks
 
 ## What the portal already is
 
-The portal is a Rust server. Its pages are built from small server-side components (like React components, but they run on the server and send finished HTML). htmx swaps parts of a page in place, so the page feels fast with almost no JavaScript. Single sign-on and the directory API are already live on staging: https://unicloud-portal-staging-tszc.onrender.com/api-docs
+The portal is a Rust server with a React front end at `/app`. Its pages are built from React components that we publish as a package, `@unicloud/ui`, so your team can use the same ones. Single sign-on and the directory API are already live on staging: https://unicloud-portal-staging-tszc.onrender.com/api-docs
 
 Two facts shape every variant:
 
@@ -24,14 +24,17 @@ The portal publishes one versioned stylesheet: colours, fonts, spacing, light an
 ```html
 <link rel="stylesheet" href="https://<portal>/ui/v1/unicloud.css">
 
-<span class="uc-badge uc-badge-ok">Действащ</span>
-<div class="uc-seats" style="--taken: 18; --capacity: 30">12 / 30</div>
+<body class="uc-root">
+  <span class="uc-badge uc-badge-ok">Действащ</span>
+  <button class="uc-btn uc-btn-primary">Запиши се</button>
+</body>
 ```
 
 - **Works with:** anything that outputs HTML. Thymeleaf, JSP, React, Angular, Vue.
 - **You build:** your own markup, using our class names.
-- **Runtime link to the portal:** none after the first load (the file is cached for a year; a new version gets a new path, `v2`).
-- **Effort:** Team 1 small; your team small.
+- **Runtime link to the portal:** none after the first load (the file is cached; a new major version gets a new path, `v2`). You can also copy the file into your own static files.
+- **Status:** built. Live at `/ui/v1/unicloud.css`. The class names are listed in the package README.
+- **Effort:** Team 1 done; your team small.
 
 ### Variant B: server-fetched HTML fragments
 
@@ -57,28 +60,30 @@ model.addAttribute("studentCard", card);
 - **Buttons inside a fragment** (for example "enroll") are links to the portal's own page. The user lands there signed in, through single sign-on. A button that acted directly from your site would arrive without the portal's session, so the portal would refuse it.
 - **Effort:** Team 1 medium; your team small.
 
-### Variant C: web components
+### Variant C: React components (`@unicloud/ui`)
 
-The portal publishes a small script with standard custom elements. They only draw; they get their data from you (from the ID token claims or from the directory API your backend already calls). No cookies, no tokens in the browser.
+The portal publishes its own React components as an npm package. They only draw; they get their data from you (from the ID token claims or from the directory API your backend already calls). No cookies, no tokens in the browser. No npm account or registry is needed: the portal serves the package file.
 
-```html
-<script type="module" src="https://<portal>/ui/v1/unicloud.js"></script>
-
-<unicloud-header name="Александър Стоянов" role="STUDENT" portal="https://<portal>"></unicloud-header>
-<unicloud-status status="INTERRUPTED"></unicloud-status>
-<unicloud-seats taken="18" capacity="30"></unicloud-seats>
-<unicloud-course code="MATH1" title="Линейна алгебра" semester="2026-27-W"></unicloud-course>
+```sh
+npm install https://<portal>/ui/v1/unicloud-ui-1.0.0.tgz
 ```
 
-```jsx
-// React 19 uses custom elements directly
-<unicloud-status status={student.status} />
+```tsx
+import "@unicloud/ui/unicloud.css";
+import { TopBar, StatusBadge, SeatsMeter, CourseCard } from "@unicloud/ui";
+
+<StatusBadge status={student.status} />
+<SeatsMeter taken={18} capacity={30} />
+<CourseCard code="MATH1" title="Линейна алгебра" seats={{ taken: 18, capacity: 30 }} />
 ```
 
-- **Works with:** everything, including React, Angular and Vue apps and plain Thymeleaf pages.
-- **You build:** you pass the data in.
-- **Runtime link to the portal:** none after the first load (cached, versioned).
-- **Effort:** Team 1 medium; your team small.
+Components in 1.0.0: `TopBar`, `PageHeader`, `Card`, `Button`, form fields, `Alert`, `StatusBadge`, `RoleBadge`, `SeatsMeter`, `DataTable`, `EmptyState`, `Stat`, `CourseCard`, `StudentCard`, `ConfirmButton`. The README in the package shows each one.
+
+- **Works with:** React 19 apps. Angular and Vue apps can use variant A's classes instead.
+- **You build:** you pass the data in, and keep your own routing and state.
+- **Runtime link to the portal:** none. The package is part of your build.
+- **Status:** built. The portal itself uses these components.
+- **Effort:** Team 1 done; your team small.
 
 ### Variant D: data only
 
@@ -91,32 +96,33 @@ You use the directory API and the claims as JSON and build your own UI. This alr
 
 ## Side by side
 
-| | A: CSS | B: fragments | C: web components | D: data only |
+| | A: CSS | B: fragments | C: React package | D: data only |
 |---|---|---|---|---|
 | Server-rendered Java (Thymeleaf, JSP) | yes | best fit | yes | yes |
-| React, Angular, Vue | yes | awkward | best fit | yes |
+| React | yes | awkward | best fit | yes |
+| Angular, Vue | yes | awkward | no (use A) | yes |
 | Same look as the portal | close | exact | exact | no |
 | Your page waits for the portal | no | yes, from your server, cacheable | no | only for data |
 | Portal data rendered for you | no | yes | no (you pass it) | no |
 | Tokens or cookies in the browser | no | no | no | no |
-| Work for Team 1 | small | medium | medium | none |
+| Work for Team 1 | done | medium | done | none |
 | Work for your team | small | small | small | large |
 
 ## What Team 1 recommends
 
 - **Everyone:** A. It is the cheapest way to look like one product, and it costs nothing at run time.
 - **Server-rendered modules:** add B for the few pieces where the portal owns the data (student card, enrollments, roster).
-- **Single-page apps:** add C.
+- **React apps:** add C.
 - D stays available to everyone in any case.
 
-We build only what at least one team will use. Nothing here changes single sign-on or the directory API.
+A and C are built. We build B only if at least one team will use it. Nothing here changes single sign-on or the directory API.
 
 ## What we need from you
 
 Please answer in the team channel or as a comment:
 
 1. How does your module render its pages? (Thymeleaf or JSP, React, Angular, Vue, other)
-2. Which variants would you use? (A, B, C, D)
+2. Which variants would you use? (A, B, C, D) If C: which React version do you use?
 3. Which pieces do you need? (top bar, status badge, seats meter, course card, student card, enrollment list, roster, other)
 4. With B: can your backend cache a fragment for a minute, and leave it out when the portal does not answer?
 5. Your module's address on staging, so we can test with you.

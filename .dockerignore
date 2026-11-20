@@ -8,3 +8,6 @@ docs/
 openspec/
 tests/
 scripts/
+web/**/node_modules/
+web/**/dist/
+web/dist-ui/

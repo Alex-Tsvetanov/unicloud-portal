@@ -6,11 +6,21 @@
     "summary": "Single sign-on, the directory and the staging tools for UniCloud modules.",
     "description": "The APIs a UniCloud module calls. The OpenID Connect browser flow (`/oauth2/authorize`, `/connect/logout`) is described by the discovery document and by [docs/sso.md](https://github.com/Alex-Tsvetanov/unicloud-portal/blob/main/docs/sso.md); every OIDC library reads it.\n\n**Try it out:** register a module with the directory grant on the staging page (`/staging`), press **Authorize**, choose `directoryToken` and enter the client id and secret. Swagger UI then gets a client-credentials token for you.\n\nUnknown values mean no access: `role` and `permissions` may gain new values. Treat a value you do not know as no access."
   },
-  "servers": [{ "url": "/" }],
+  "servers": [{"url": "/"}],
   "tags": [
     { "name": "SSO", "description": "OpenID Connect endpoints a module's backend calls" },
-    { "name": "Directory", "description": "Read who is who with no user present. Needs a client-credentials token with the `directory` scope" },
-    { "name": "Staging tools", "description": "Only on staging and development. In production these routes answer 404. No sign-in needed; every team shares the data" },
+    {
+      "name": "Directory",
+      "description": "Read who is who with no user present. Needs a client-credentials token with the `directory` scope"
+    },
+    {
+      "name": "Staging tools",
+      "description": "Only on staging and development. In production these routes answer 404. No sign-in needed; every team shares the data"
+    },
+    {
+      "name": "Portal UI",
+      "description": "The portal's own single-page app. Same-site only: session cookie plus `X-CSRF-Token` on changes. Not for modules."
+    },
     { "name": "Operations", "description": "Health and replica identity" }
   ],
   "paths": {
@@ -22,7 +32,7 @@
         "responses": {
           "200": {
             "description": "Endpoints and capabilities. `issuer` is the exact value of `iss` in every token",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Discovery" } } }
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/Discovery"}} }
           }
         }
       }
@@ -33,9 +43,7 @@
         "summary": "Public signing keys",
         "description": "Cache the keys. Fetch them again when a token has a `kid` you do not know.",
         "operationId": "jwks",
-        "responses": {
-          "200": { "description": "The key set", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Jwks" } } } }
-        }
+        "responses": { "200": {"description": "The key set", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Jwks"}}}} }
       }
     },
     "/oauth2/token": {
@@ -44,16 +52,13 @@
         "summary": "Exchange a code, or get a directory token",
         "description": "Client authentication is HTTP Basic only (`client_secret_basic`).\n\n- `authorization_code`: exchanges the code from the callback. The code works once and for 60 seconds. A second exchange fails and revokes what the first one issued.\n- `client_credentials`: a token for the directory API. The module must hold the `directory` grant.",
         "operationId": "token",
-        "security": [{ "clientBasic": [] }],
+        "security": [{"clientBasic": []}],
         "requestBody": {
           "required": true,
           "content": {
             "application/x-www-form-urlencoded": {
               "schema": {
-                "oneOf": [
-                  { "$ref": "#/components/schemas/AuthorizationCodeGrant" },
-                  { "$ref": "#/components/schemas/ClientCredentialsGrant" }
-                ]
+                "oneOf": [{"$ref": "#/components/schemas/AuthorizationCodeGrant"}, {"$ref": "#/components/schemas/ClientCredentialsGrant"}]
               }
             }
           }
@@ -61,15 +66,15 @@
         "responses": {
           "200": {
             "description": "Tokens. `Cache-Control: no-store`. There is never a refresh token",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenResponse" } } }
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/TokenResponse"}} }
           },
           "400": {
             "description": "`invalid_grant` (bad, used or expired code, wrong `redirect_uri` or verifier, disabled user), `invalid_scope`, `invalid_request` or `unsupported_grant_type`",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OAuthError" } } }
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/OAuthError"}} }
           },
           "401": {
             "description": "`invalid_client`: unknown client, wrong secret, or credentials not sent by HTTP Basic",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OAuthError" } } }
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/OAuthError"}} }
           }
         }
       }
@@ -80,9 +85,9 @@
         "summary": "The signed-in user's claims",
         "description": "Takes the access token from an authorization-code exchange. Claims are read from the database now, for the scopes granted at login.",
         "operationId": "userinfo",
-        "security": [{ "userAccessToken": [] }],
+        "security": [{"userAccessToken": []}],
         "responses": {
-          "200": { "description": "Claims", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Claims" } } } },
+          "200": { "description": "Claims", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Claims"}}} },
           "401": { "$ref": "#/components/responses/InvalidToken" }
         }
       },
@@ -90,9 +95,9 @@
         "tags": ["SSO"],
         "summary": "The signed-in user's claims (POST)",
         "operationId": "userinfoPost",
-        "security": [{ "userAccessToken": [] }],
+        "security": [{"userAccessToken": []}],
         "responses": {
-          "200": { "description": "Claims", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Claims" } } } },
+          "200": { "description": "Claims", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Claims"}}} },
           "401": { "$ref": "#/components/responses/InvalidToken" }
         }
       }
@@ -102,10 +107,13 @@
         "tags": ["Directory"],
         "summary": "A user",
         "operationId": "directoryUser",
-        "security": [{ "directoryToken": ["directory"] }],
-        "parameters": [{ "$ref": "#/components/parameters/Sub" }],
+        "security": [{"directoryToken": ["directory"]}],
+        "parameters": [{"$ref": "#/components/parameters/Sub"}],
         "responses": {
-          "200": { "description": "The user, with the same shapes as the claims", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DirectoryUser" } } } },
+          "200": {
+            "description": "The user, with the same shapes as the claims",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/DirectoryUser"}} }
+          },
           "401": { "$ref": "#/components/responses/InvalidToken" },
           "404": { "$ref": "#/components/responses/NotFound" }
         }
@@ -116,12 +124,18 @@
         "tags": ["Directory"],
         "summary": "A student's current courses",
         "operationId": "directoryStudentEnrollments",
-        "security": [{ "directoryToken": ["directory"] }],
-        "parameters": [{ "$ref": "#/components/parameters/Sub" }],
+        "security": [{"directoryToken": ["directory"]}],
+        "parameters": [{"$ref": "#/components/parameters/Sub"}],
         "responses": {
-          "200": { "description": "Offerings the student is enrolled in", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Offering" } } } } },
+          "200": {
+            "description": "Offerings the student is enrolled in",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Offering"}}} }
+          },
           "401": { "$ref": "#/components/responses/InvalidToken" },
-          "404": { "description": "Unknown user, or not a student", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotFound" } } } }
+          "404": {
+            "description": "Unknown user, or not a student",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/NotFound"}} }
+          }
         }
       }
     },
@@ -130,12 +144,18 @@
         "tags": ["Directory"],
         "summary": "The courses a teacher teaches",
         "operationId": "directoryTeacherOfferings",
-        "security": [{ "directoryToken": ["directory"] }],
-        "parameters": [{ "$ref": "#/components/parameters/Sub" }],
+        "security": [{"directoryToken": ["directory"]}],
+        "parameters": [{"$ref": "#/components/parameters/Sub"}],
         "responses": {
-          "200": { "description": "Offerings", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Offering" } } } } },
+          "200": {
+            "description": "Offerings",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Offering"}}} }
+          },
           "401": { "$ref": "#/components/responses/InvalidToken" },
-          "404": { "description": "Unknown user, or not a teacher", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotFound" } } } }
+          "404": {
+            "description": "Unknown user, or not a teacher",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/NotFound"}} }
+          }
         }
       }
     },
@@ -144,10 +164,21 @@
         "tags": ["Directory"],
         "summary": "The students enrolled in a course",
         "operationId": "directoryOfferingStudents",
-        "security": [{ "directoryToken": ["directory"] }],
-        "parameters": [{ "name": "id", "in": "path", "required": true, "description": "The offering id (one course in one semester)", "schema": { "type": "integer", "format": "int64" } }],
+        "security": [{"directoryToken": ["directory"]}],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The offering id (one course in one semester)",
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
         "responses": {
-          "200": { "description": "Enrolled students", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/OfferingStudent" } } } } },
+          "200": {
+            "description": "Enrolled students",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/OfferingStudent"}}} }
+          },
           "401": { "$ref": "#/components/responses/InvalidToken" },
           "404": { "$ref": "#/components/responses/NotFound" }
         }
@@ -158,17 +189,23 @@
         "tags": ["Directory"],
         "summary": "A faculty's courses",
         "operationId": "directoryFacultyOfferings",
-        "security": [{ "directoryToken": ["directory"] }],
+        "security": [{"directoryToken": ["directory"]}],
         "parameters": [
           { "$ref": "#/components/parameters/FacultyCode" },
-          { "name": "semester", "in": "query", "required": false, "description": "Only this semester, for example `2026-27-W`", "schema": { "type": "string" } },
+          {
+            "name": "semester",
+            "in": "query",
+            "required": false,
+            "description": "Only this semester, for example `2026-27-W`",
+            "schema": { "type": "string" }
+          },
           { "$ref": "#/components/parameters/Page" }
         ],
         "responses": {
           "200": {
             "description": "At most 200 offerings. When more remain, the `Link` header has `rel=\"next\"`",
-            "headers": { "Link": { "$ref": "#/components/headers/NextLink" } },
-            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/OfferingWithTeacher" } } } }
+            "headers": { "Link": {"$ref": "#/components/headers/NextLink"} },
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/OfferingWithTeacher"}}} }
           },
           "401": { "$ref": "#/components/responses/InvalidToken" },
           "404": { "$ref": "#/components/responses/NotFound" }
@@ -180,13 +217,13 @@
         "tags": ["Directory"],
         "summary": "A faculty's students",
         "operationId": "directoryFacultyStudents",
-        "security": [{ "directoryToken": ["directory"] }],
-        "parameters": [{ "$ref": "#/components/parameters/FacultyCode" }, { "$ref": "#/components/parameters/Page" }],
+        "security": [{"directoryToken": ["directory"]}],
+        "parameters": [{"$ref": "#/components/parameters/FacultyCode"}, {"$ref": "#/components/parameters/Page"}],
         "responses": {
           "200": {
             "description": "At most 200 students. When more remain, the `Link` header has `rel=\"next\"`",
-            "headers": { "Link": { "$ref": "#/components/headers/NextLink" } },
-            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/FacultyStudent" } } } }
+            "headers": { "Link": {"$ref": "#/components/headers/NextLink"} },
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/FacultyStudent"}}} }
           },
           "401": { "$ref": "#/components/responses/InvalidToken" },
           "404": { "$ref": "#/components/responses/NotFound" }
@@ -199,7 +236,10 @@
         "summary": "Every permission and each role's defaults",
         "operationId": "stagingRoles",
         "responses": {
-          "200": { "description": "Roles and permissions", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StagingRoles" } } } }
+          "200": {
+            "description": "Roles and permissions",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/StagingRoles"}} }
+          }
         }
       }
     },
@@ -209,7 +249,10 @@
         "summary": "Every user (never passwords)",
         "operationId": "stagingUsers",
         "responses": {
-          "200": { "description": "Users ordered by id", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/StagingUser" } } } } }
+          "200": {
+            "description": "Users ordered by id",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/StagingUser"}}} }
+          }
         }
       },
       "post": {
@@ -217,11 +260,14 @@
         "summary": "Create a test user",
         "description": "The user can sign in at once, with no forced password change.",
         "operationId": "stagingCreateUser",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StagingCreateUser" } } } },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StagingCreateUser"}}} },
         "responses": {
-          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StagingUser" } } } },
+          "201": { "description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StagingUser"}}} },
           "400": { "$ref": "#/components/responses/ApiError" },
-          "409": { "description": "The email or faculty number is taken", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } } }
+          "409": {
+            "description": "The email or faculty number is taken",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}} }
+          }
         }
       }
     },
@@ -231,15 +277,23 @@
         "summary": "Replace a user's permissions",
         "description": "Tokens carry the permissions of the moment they are issued, so sign in again afterwards.",
         "operationId": "stagingSetPermissions",
-        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }],
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64"}}],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "type": "object", "required": ["permissions"], "properties": { "permissions": { "type": "array", "items": { "$ref": "#/components/schemas/Permission" } } } } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["permissions"],
+                "properties": { "permissions": {"type": "array", "items": {"$ref": "#/components/schemas/Permission"}} }
+              }
+            }
+          }
         },
         "responses": {
-          "200": { "description": "The user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StagingUser" } } } },
+          "200": { "description": "The user", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StagingUser"}}} },
           "400": { "$ref": "#/components/responses/ApiError" },
-          "404": { "description": "Unknown user", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } } }
+          "404": { "description": "Unknown user", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}} }
         }
       }
     },
@@ -249,11 +303,14 @@
         "summary": "Register a module",
         "description": "The secret is shown once. Register again under a new id if it is lost.",
         "operationId": "stagingRegisterClient",
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClientRegistration" } } } },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClientRegistration"}}} },
         "responses": {
-          "201": { "description": "Registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClientRegistered" } } } },
+          "201": { "description": "Registered", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClientRegistered"}}} },
           "400": { "$ref": "#/components/responses/ApiError" },
-          "409": { "description": "The client id is taken", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } } }
+          "409": {
+            "description": "The client id is taken",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}} }
+          }
         }
       }
     },
@@ -266,9 +323,592 @@
         "responses": {
           "200": {
             "description": "Up",
-            "content": { "application/json": { "schema": { "type": "object", "required": ["status", "version"], "properties": { "status": { "const": "ok" }, "version": { "type": "string", "description": "The git commit" } } } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status", "version"],
+                  "properties": { "status": {"const": "ok"}, "version": {"type": "string", "description": "The git commit"} }
+                }
+              }
+            }
           }
         }
+      }
+    },
+    "/api/v1/portal/me": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalMe",
+        "summary": "The signed-in user, the CSRF token and the navigation",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Session", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Me"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "description": "The app calls this first. `401` means: go to `/login`. `403 password_change_required` means: go to `/password`."
+      }
+    },
+    "/api/v1/portal/options": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalOptions",
+        "summary": "Faculties, specialties and the current semester for forms",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Options", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Options"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/profile": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalProfile",
+        "summary": "The signed-in user's profile",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Profile", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DirectoryUser"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/students/{sub}": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalStudent",
+        "summary": "Another student's profile",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Profile", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DirectoryUser"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "Not found, or not visible to you (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "description": "Allowed by `STUDENT_PROFILE_READ_ANY`, by `STUDENT_PROFILE_READ_FACULTY` for the reader's faculty, or by `STUDENT_PROFILE_READ_ENROLLED` for the reader's offerings. Otherwise `404`.",
+        "parameters": [{"name": "sub", "in": "path", "required": true, "schema": {"type": "string"}}]
+      }
+    },
+    "/api/v1/portal/courses": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalCourses",
+        "summary": "Open offerings of the current semester",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": {
+            "description": "Offerings",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/CatalogOffering"}}} }
+          },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [
+          { "name": "q", "in": "query", "required": false, "description": "Search in code or title", "schema": {"type": "string"} },
+          { "name": "faculty", "in": "query", "required": false, "description": "Faculty code", "schema": {"type": "string"} }
+        ]
+      }
+    },
+    "/api/v1/portal/courses/{id}/enroll": {
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalEnroll",
+        "summary": "Enroll in an offering",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "200": { "description": "Enrolled", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EnrollResult"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Refused: full, closed, rejected before, already enrolled or not an active student",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/EnrollResult"}} }
+          }
+        },
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64"}}]
+      }
+    },
+    "/api/v1/portal/enrollments": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalMyEnrollments",
+        "summary": "The signed-in student's enrollments",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": {
+            "description": "Enrollments",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/MyEnrollment"}}} }
+          },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/enrollments/{id}/cancel": {
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalCancel",
+        "summary": "Cancel one's own enrollment",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "200": { "description": "Cancelled" },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "Not found, or not visible to you (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Nothing to cancel (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64"}}]
+      }
+    },
+    "/api/v1/portal/teach/offerings": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalTeachOfferings",
+        "summary": "The offerings the signed-in teacher teaches",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": {
+            "description": "Offerings",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/TeachOffering"}}} }
+          },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/teach/offerings/{id}": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalRoster",
+        "summary": "One of the teacher's offerings and its students",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Roster", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OfferingRoster"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "Not found, or not visible to you (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64"}}]
+      }
+    },
+    "/api/v1/portal/teach/enrollments/{id}/reject": {
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalReject",
+        "summary": "Reject an enrollment in one of the teacher's offerings",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "200": { "description": "Rejected" },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "Not found, or not visible to you (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Not an active enrollment in your offering (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64"}}]
+      }
+    },
+    "/api/v1/portal/faculty": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalFaculty",
+        "summary": "The dean's faculty: this semester's offerings and the students",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Faculty", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FacultyOverview"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/inspect/students": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalInspectStudents",
+        "summary": "Students, for the academic office",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": {
+            "description": "Students",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/InspectStudent"}}} }
+          },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "q", "in": "query", "required": false, "description": "Name, email or faculty number", "schema": {"type": "string"}}]
+      },
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalCreateStudent",
+        "summary": "Create a student (first password must be changed)",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "201": { "description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Created"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Already exists (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NewStudent"}}} }
+      }
+    },
+    "/api/v1/portal/inspect/students/{sub}/status": {
+      "put": {
+        "tags": ["Portal UI"],
+        "operationId": "portalSetStatus",
+        "summary": "Change a student's status",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "204": { "description": "Changed" },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "No such student (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "sub", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/StatusChange"}}} }
+      }
+    },
+    "/api/v1/portal/inspect/courses": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalInspectCourses",
+        "summary": "Courses, offerings and teachers, for the academic office",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": { "description": "Catalogue", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/InspectCourses"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalCreateCourse",
+        "summary": "Add a course",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "201": { "description": "Created" },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Already exists (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NewCourse"}}} }
+      }
+    },
+    "/api/v1/portal/inspect/offerings": {
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalCreateOffering",
+        "summary": "Add an offering for a semester",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "201": { "description": "Created" },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Already exists (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NewOffering"}}} }
+      }
+    },
+    "/api/v1/portal/inspect/offerings/{id}/toggle": {
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalToggleOffering",
+        "summary": "Open or close enrollment for an offering",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "200": { "description": "New state", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Toggled"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "Not found, or not visible to you (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64"}}]
+      }
+    },
+    "/api/v1/portal/admin/staff": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalStaff",
+        "summary": "Staff accounts",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": {
+            "description": "Staff",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/StaffMember"}}} }
+          },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalCreateStaff",
+        "summary": "Create a staff account (first password must be changed)",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "201": { "description": "Created", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Created"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Already exists (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NewStaff"}}} }
+      }
+    },
+    "/api/v1/portal/admin/staff/{sub}/toggle": {
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalToggleStaff",
+        "summary": "Enable or disable a staff account",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "200": { "description": "New state", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Toggled"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "404": {
+            "description": "Not found, or not visible to you (`not_found`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "parameters": [{"name": "sub", "in": "path", "required": true, "schema": {"type": "string"}}]
+      }
+    },
+    "/api/v1/portal/admin/modules": {
+      "get": {
+        "tags": ["Portal UI"],
+        "operationId": "portalModules",
+        "summary": "Modules registered for single sign-on",
+        "security": [{"portalSession": []}],
+        "responses": {
+          "200": {
+            "description": "Modules",
+            "content": { "application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/ModuleSummary"}}} }
+          },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Portal UI"],
+        "operationId": "portalRegisterModule",
+        "summary": "Register a module; the secret is in this answer only",
+        "security": [{"portalSession": [], "csrfHeader": []}],
+        "responses": {
+          "201": { "description": "Registered", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClientRegistered"}}} },
+          "401": {
+            "description": "Not signed in (`unauthenticated`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "403": {
+            "description": "`forbidden`, or `password_change_required` before the first password change",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "400": {
+            "description": "Invalid input (`invalid`), with a Bulgarian message",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          },
+          "409": {
+            "description": "Already exists (`conflict`)",
+            "content": { "application/json": {"schema": {"$ref": "#/components/schemas/PortalError"}} }
+          }
+        },
+        "requestBody": { "required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClientRegistration"}}} }
       }
     }
   },
@@ -279,33 +919,75 @@
       "directoryToken": {
         "type": "oauth2",
         "description": "A client-credentials token with the `directory` scope",
-        "flows": { "clientCredentials": { "tokenUrl": "/oauth2/token", "scopes": { "directory": "Read the directory" } } }
-      }
+        "flows": { "clientCredentials": {"tokenUrl": "/oauth2/token", "scopes": {"directory": "Read the directory"}} }
+      },
+      "portalSession": { "type": "apiKey", "in": "cookie", "name": "__Host-UNICLOUD_SSO", "description": "The portal's session, set by `/login`" },
+      "csrfHeader": { "type": "apiKey", "in": "header", "name": "X-CSRF-Token", "description": "The `csrf` value from `GET /api/v1/portal/me`" }
     },
     "parameters": {
-      "Sub": { "name": "sub", "in": "path", "required": true, "description": "The portal's user id (the `sub` claim)", "schema": { "type": "string", "examples": ["4"] } },
-      "FacultyCode": { "name": "code", "in": "path", "required": true, "description": "The faculty code", "schema": { "type": "string", "examples": ["FCST"] } },
-      "Page": { "name": "page", "in": "query", "required": false, "description": "Page number, from 1", "schema": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 1 } }
+      "Sub": {
+        "name": "sub",
+        "in": "path",
+        "required": true,
+        "description": "The portal's user id (the `sub` claim)",
+        "schema": { "type": "string", "examples": ["4"] }
+      },
+      "FacultyCode": {
+        "name": "code",
+        "in": "path",
+        "required": true,
+        "description": "The faculty code",
+        "schema": { "type": "string", "examples": ["FCST"] }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "description": "Page number, from 1",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 1 }
+      }
     },
-    "headers": {
-      "NextLink": { "description": "`<...?page=N>; rel=\"next\"` when more items remain", "schema": { "type": "string" } }
-    },
+    "headers": { "NextLink": {"description": "`<...?page=N>; rel=\"next\"` when more items remain", "schema": {"type": "string"}} },
     "responses": {
       "InvalidToken": {
         "description": "Missing, invalid, expired or revoked token, or the wrong kind of token",
-        "content": { "application/json": { "schema": { "type": "object", "required": ["error"], "properties": { "error": { "const": "invalid_token" } } } } }
+        "content": { "application/json": {"schema": {"type": "object", "required": ["error"], "properties": {"error": {"const": "invalid_token"}}}} }
       },
-      "NotFound": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotFound" } } } },
-      "ApiError": { "description": "Invalid input", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } } }
+      "NotFound": { "description": "Not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/NotFound"}}} },
+      "ApiError": { "description": "Invalid input", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiError"}}} }
     },
     "schemas": {
-      "Role": { "type": "string", "description": "Today one of these. More may come: treat an unknown role as no access", "examples": ["STUDENT"], "enum": ["STUDENT", "TEACHER", "DEAN", "INSPECTOR", "ADMIN"] },
+      "Role": {
+        "type": "string",
+        "description": "Today one of these. More may come: treat an unknown role as no access",
+        "examples": ["STUDENT"],
+        "enum": ["STUDENT", "TEACHER", "DEAN", "INSPECTOR", "ADMIN"]
+      },
       "Permission": {
         "type": "string",
         "description": "Lists are in this (bit) order. More may come",
-        "enum": ["STAFF_CREATE", "STUDENT_CREATE", "STUDENT_PROFILE_READ_OWN", "STUDENT_PROFILE_READ_ANY", "STUDENT_PROFILE_READ_ENROLLED", "COURSE_CREATE_MODIFY", "COURSE_OFFERING_READ", "COURSE_OFFERING_CREATE_MODIFY", "ENROLLMENT_REQUEST_CREATE", "ENROLLMENT_REQUEST_ACCEPT_REJECT", "STUDENT_PROFILE_READ_FACULTY"]
+        "enum": [
+          "STAFF_CREATE",
+          "STUDENT_CREATE",
+          "STUDENT_PROFILE_READ_OWN",
+          "STUDENT_PROFILE_READ_ANY",
+          "STUDENT_PROFILE_READ_ENROLLED",
+          "COURSE_CREATE_MODIFY",
+          "COURSE_OFFERING_READ",
+          "COURSE_OFFERING_CREATE_MODIFY",
+          "ENROLLMENT_REQUEST_CREATE",
+          "ENROLLMENT_REQUEST_ACCEPT_REJECT",
+          "STUDENT_PROFILE_READ_FACULTY"
+        ]
       },
-      "Faculty": { "type": "object", "required": ["code", "name"], "properties": { "code": { "type": "string", "examples": ["FCST"] }, "name": { "type": "string", "examples": ["Факултет по компютърни системи и технологии"] } } },
+      "Faculty": {
+        "type": "object",
+        "required": ["code", "name"],
+        "properties": {
+          "code": { "type": "string", "examples": ["FCST"] },
+          "name": { "type": "string", "examples": ["Факултет по компютърни системи и технологии"] }
+        }
+      },
       "Student": {
         "type": "object",
         "required": ["faculty_number", "specialty", "study_year", "status"],
@@ -327,7 +1009,7 @@
           "family_name": { "type": "string" },
           "name": { "type": "string" },
           "role": { "$ref": "#/components/schemas/Role" },
-          "permissions": { "type": "array", "items": { "$ref": "#/components/schemas/Permission" } },
+          "permissions": { "type": "array", "items": {"$ref": "#/components/schemas/Permission"} },
           "faculty": { "$ref": "#/components/schemas/Faculty" },
           "student": { "$ref": "#/components/schemas/Student" }
         }
@@ -358,12 +1040,15 @@
         }
       },
       "OfferingWithTeacher": {
-        "allOf": [{ "$ref": "#/components/schemas/Offering" }, { "type": "object", "required": ["teacher_sub"], "properties": { "teacher_sub": { "type": "string" } } }]
+        "allOf": [
+          { "$ref": "#/components/schemas/Offering" },
+          { "type": "object", "required": ["teacher_sub"], "properties": {"teacher_sub": {"type": "string"}} }
+        ]
       },
       "OfferingStudent": {
         "type": "object",
         "required": ["sub", "name", "faculty_number"],
-        "properties": { "sub": { "type": "string" }, "name": { "type": "string" }, "faculty_number": { "type": "string" } }
+        "properties": { "sub": {"type": "string"}, "name": {"type": "string"}, "faculty_number": {"type": "string"} }
       },
       "FacultyStudent": {
         "type": "object",
@@ -377,7 +1062,7 @@
           "status": { "type": "string", "enum": ["ACTIVE", "INTERRUPTED", "GRADUATED"] }
         }
       },
-      "NotFound": { "type": "object", "required": ["error"], "properties": { "error": { "const": "not_found" } } },
+      "NotFound": { "type": "object", "required": ["error"], "properties": {"error": {"const": "not_found"}} },
       "AuthorizationCodeGrant": {
         "type": "object",
         "required": ["grant_type", "code", "redirect_uri", "code_verifier"],
@@ -391,7 +1076,7 @@
       "ClientCredentialsGrant": {
         "type": "object",
         "required": ["grant_type"],
-        "properties": { "grant_type": { "const": "client_credentials" }, "scope": { "const": "directory" } }
+        "properties": { "grant_type": {"const": "client_credentials"}, "scope": {"const": "directory"} }
       },
       "TokenResponse": {
         "type": "object",
@@ -408,7 +1093,10 @@
         "type": "object",
         "required": ["error"],
         "properties": {
-          "error": { "type": "string", "enum": ["invalid_request", "invalid_client", "invalid_grant", "invalid_scope", "unsupported_grant_type", "server_error"] },
+          "error": {
+            "type": "string",
+            "enum": ["invalid_request", "invalid_client", "invalid_grant", "invalid_scope", "unsupported_grant_type", "server_error"]
+          },
           "error_description": { "type": "string" }
         }
       },
@@ -422,12 +1110,12 @@
           "jwks_uri": { "type": "string" },
           "userinfo_endpoint": { "type": "string" },
           "end_session_endpoint": { "type": "string" },
-          "response_types_supported": { "type": "array", "items": { "type": "string" } },
-          "grant_types_supported": { "type": "array", "items": { "type": "string" } },
-          "code_challenge_methods_supported": { "type": "array", "items": { "type": "string" } },
-          "scopes_supported": { "type": "array", "items": { "type": "string" } },
-          "token_endpoint_auth_methods_supported": { "type": "array", "items": { "type": "string" } },
-          "id_token_signing_alg_values_supported": { "type": "array", "items": { "type": "string" } }
+          "response_types_supported": { "type": "array", "items": {"type": "string"} },
+          "grant_types_supported": { "type": "array", "items": {"type": "string"} },
+          "code_challenge_methods_supported": { "type": "array", "items": {"type": "string"} },
+          "scopes_supported": { "type": "array", "items": {"type": "string"} },
+          "token_endpoint_auth_methods_supported": { "type": "array", "items": {"type": "string"} },
+          "id_token_signing_alg_values_supported": { "type": "array", "items": {"type": "string"} }
         }
       },
       "Jwks": {
@@ -439,7 +1127,12 @@
             "items": {
               "type": "object",
               "required": ["kty", "kid", "n", "e"],
-              "properties": { "kty": { "const": "RSA" }, "kid": { "type": "string", "description": "RFC 7638 thumbprint" }, "n": { "type": "string" }, "e": { "type": "string" } }
+              "properties": {
+                "kty": { "const": "RSA" },
+                "kid": { "type": "string", "description": "RFC 7638 thumbprint" },
+                "n": { "type": "string" },
+                "e": { "type": "string" }
+              }
             }
           }
         }
@@ -448,8 +1141,8 @@
         "type": "object",
         "required": ["roleDefaults", "permissions"],
         "properties": {
-          "roleDefaults": { "type": "object", "additionalProperties": { "type": "array", "items": { "$ref": "#/components/schemas/Permission" } } },
-          "permissions": { "type": "array", "items": { "$ref": "#/components/schemas/Permission" } }
+          "roleDefaults": { "type": "object", "additionalProperties": {"type": "array", "items": {"$ref": "#/components/schemas/Permission"}} },
+          "permissions": { "type": "array", "items": {"$ref": "#/components/schemas/Permission"} }
         }
       },
       "StagingUser": {
@@ -462,7 +1155,7 @@
           "lastName": { "type": "string" },
           "role": { "$ref": "#/components/schemas/Role" },
           "faculty": { "type": ["string", "null"], "description": "Faculty code" },
-          "permissions": { "type": "array", "items": { "$ref": "#/components/schemas/Permission" } },
+          "permissions": { "type": "array", "items": {"$ref": "#/components/schemas/Permission"} },
           "student": { "type": "boolean", "description": "Has an academic record" }
         }
       },
@@ -476,7 +1169,11 @@
           "lastName": { "type": "string", "maxLength": 100 },
           "role": { "type": "string", "description": "Case-insensitive", "examples": ["TEACHER"] },
           "faculty": { "type": "string", "description": "Faculty code. Required for TEACHER, DEAN and INSPECTOR", "examples": ["FCST"] },
-          "permissions": { "type": "array", "description": "Left out: the role's defaults. `[]`: none", "items": { "$ref": "#/components/schemas/Permission" } },
+          "permissions": {
+            "type": "array",
+            "description": "Left out: the role's defaults. `[]`: none",
+            "items": { "$ref": "#/components/schemas/Permission" }
+          },
           "student": {
             "type": "object",
             "description": "Required for STUDENT, refused for other roles",
@@ -494,10 +1191,15 @@
         "type": "object",
         "required": ["clientId", "name", "redirectUris"],
         "properties": {
-          "clientId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$", "description": "`unicloud-*` and all-digit ids are reserved", "examples": ["module-x"] },
+          "clientId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$",
+            "description": "`unicloud-*` and all-digit ids are reserved",
+            "examples": ["module-x"]
+          },
           "name": { "type": "string", "maxLength": 200 },
-          "redirectUris": { "type": "array", "minItems": 1, "items": { "type": "string" }, "examples": [["http://localhost:3000/auth/callback"]] },
-          "postLogoutRedirectUris": { "type": "array", "items": { "type": "string" } },
+          "redirectUris": { "type": "array", "minItems": 1, "items": {"type": "string"}, "examples": [["http://localhost:3000/auth/callback"]] },
+          "postLogoutRedirectUris": { "type": "array", "items": {"type": "string"} },
           "directory": { "type": "boolean", "default": false, "description": "Grant the directory API" }
         }
       },
@@ -507,8 +1209,8 @@
         "properties": {
           "clientId": { "type": "string" },
           "clientSecret": { "type": "string", "description": "43 characters. Shown once" },
-          "redirectUris": { "type": "array", "items": { "type": "string" } },
-          "postLogoutRedirectUris": { "type": "array", "items": { "type": "string" } },
+          "redirectUris": { "type": "array", "items": {"type": "string"} },
+          "postLogoutRedirectUris": { "type": "array", "items": {"type": "string"} },
           "directory": { "type": "boolean" }
         }
       },
@@ -521,7 +1223,263 @@
           "error": { "type": "string" },
           "message": { "type": "string" },
           "path": { "type": "string" },
-          "fieldErrors": { "type": ["array", "null"], "items": { "type": "object", "properties": { "field": { "type": "string" }, "message": { "type": "string" } } } }
+          "fieldErrors": {
+            "type": ["array", "null"],
+            "items": { "type": "object", "properties": {"field": {"type": "string"}, "message": {"type": "string"}} }
+          }
+        }
+      },
+      "PortalError": {
+        "type": "object",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": ["unauthenticated", "password_change_required", "forbidden", "not_found", "invalid", "conflict", "server_error"]
+          },
+          "message": { "type": "string" }
+        }
+      },
+      "NavItem": { "type": "object", "required": ["path", "label"], "properties": {"path": {"type": "string"}, "label": {"type": "string"}} },
+      "Me": {
+        "type": "object",
+        "required": ["user", "csrf", "semester", "nav"],
+        "properties": {
+          "user": {
+            "type": "object",
+            "required": ["sub", "email", "given_name", "family_name", "name", "role", "role_label", "faculty", "permissions"],
+            "properties": {
+              "sub": { "type": "string" },
+              "email": { "type": "string" },
+              "given_name": { "type": "string" },
+              "family_name": { "type": "string" },
+              "name": { "type": "string" },
+              "role": { "$ref": "#/components/schemas/Role" },
+              "role_label": { "type": "string" },
+              "faculty": { "oneOf": [{"$ref": "#/components/schemas/Faculty"}, {"type": "null"}] },
+              "permissions": { "type": "array", "items": {"$ref": "#/components/schemas/Permission"} }
+            }
+          },
+          "csrf": { "type": "string" },
+          "semester": { "type": "string" },
+          "nav": { "type": "array", "items": {"$ref": "#/components/schemas/NavItem"} }
+        }
+      },
+      "Specialty": {
+        "type": "object",
+        "required": ["id", "faculty_code", "name"],
+        "properties": { "id": {"type": "integer"}, "faculty_code": {"type": "string"}, "name": {"type": "string"} }
+      },
+      "Options": {
+        "type": "object",
+        "required": ["faculties", "specialties", "semester"],
+        "properties": {
+          "faculties": { "type": "array", "items": {"$ref": "#/components/schemas/Faculty"} },
+          "specialties": { "type": "array", "items": {"$ref": "#/components/schemas/Specialty"} },
+          "semester": { "type": "string" }
+        }
+      },
+      "CatalogOffering": {
+        "type": "object",
+        "required": ["id", "code", "title", "ects", "faculty", "teacher", "enrolled", "capacity", "my_status"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "code": { "type": "string" },
+          "title": { "type": "string" },
+          "ects": { "type": "integer" },
+          "faculty": { "type": "string" },
+          "teacher": { "type": "string" },
+          "enrolled": { "type": "integer" },
+          "capacity": { "type": "integer" },
+          "my_status": { "oneOf": [{"type": "string", "enum": ["ENROLLED", "CANCELLED", "REJECTED"]}, {"type": "null"}] }
+        }
+      },
+      "EnrollResult": {
+        "type": "object",
+        "required": ["outcome", "message"],
+        "properties": {
+          "outcome": { "type": "string", "enum": ["ENROLLED", "ALREADY_ENROLLED", "FULL", "CLOSED", "REJECTED", "NOT_ACTIVE", "NO_SUCH_OFFERING"] },
+          "message": { "type": "string" }
+        }
+      },
+      "MyEnrollment": {
+        "type": "object",
+        "required": ["id", "code", "title", "semester", "teacher", "status"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "code": { "type": "string" },
+          "title": { "type": "string" },
+          "semester": { "type": "string" },
+          "teacher": { "type": "string" },
+          "status": { "type": "string", "enum": ["ENROLLED", "CANCELLED", "REJECTED"] }
+        }
+      },
+      "TeachOffering": {
+        "type": "object",
+        "required": ["id", "code", "title", "semester", "enrolled", "capacity", "is_open"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "code": { "type": "string" },
+          "title": { "type": "string" },
+          "semester": { "type": "string" },
+          "enrolled": { "type": "integer" },
+          "capacity": { "type": "integer" },
+          "is_open": { "type": "boolean" }
+        }
+      },
+      "RosterEntry": {
+        "type": "object",
+        "required": ["enrollment_id", "student_sub", "name", "faculty_number", "status"],
+        "properties": {
+          "enrollment_id": { "type": "integer", "format": "int64" },
+          "student_sub": { "type": "string" },
+          "name": { "type": "string" },
+          "faculty_number": { "type": "string" },
+          "status": { "type": "string", "enum": ["ENROLLED", "CANCELLED", "REJECTED"] }
+        }
+      },
+      "OfferingRoster": {
+        "type": "object",
+        "required": ["offering", "roster"],
+        "properties": {
+          "offering": { "$ref": "#/components/schemas/TeachOffering" },
+          "roster": { "type": "array", "items": {"$ref": "#/components/schemas/RosterEntry"} }
+        }
+      },
+      "FacultyOffering": {
+        "type": "object",
+        "required": ["code", "title", "teacher", "enrolled", "capacity"],
+        "properties": {
+          "code": { "type": "string" },
+          "title": { "type": "string" },
+          "teacher": { "type": "string" },
+          "enrolled": { "type": "integer" },
+          "capacity": { "type": "integer" }
+        }
+      },
+      "FacultyOverview": {
+        "type": "object",
+        "required": ["faculty", "semester", "offerings", "students"],
+        "properties": {
+          "faculty": { "$ref": "#/components/schemas/Faculty" },
+          "semester": { "type": "string" },
+          "offerings": { "type": "array", "items": {"$ref": "#/components/schemas/FacultyOffering"} },
+          "students": { "type": "array", "items": {"$ref": "#/components/schemas/FacultyStudent"} }
+        }
+      },
+      "InspectStudent": {
+        "type": "object",
+        "required": ["sub", "name", "email", "faculty_number", "specialty", "study_year", "status"],
+        "properties": {
+          "sub": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "faculty_number": { "type": "string" },
+          "specialty": { "type": "string" },
+          "study_year": { "type": "integer" },
+          "status": { "type": "string", "enum": ["ACTIVE", "INTERRUPTED", "GRADUATED"] }
+        }
+      },
+      "NewStudent": {
+        "type": "object",
+        "required": ["email", "first_name", "last_name", "faculty_number", "specialty_id", "study_year", "password"],
+        "properties": {
+          "email": { "type": "string" },
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "faculty_number": { "type": "string" },
+          "specialty_id": { "type": "integer" },
+          "study_year": { "type": "integer" },
+          "password": { "type": "string" }
+        }
+      },
+      "StatusChange": {
+        "type": "object",
+        "required": ["status"],
+        "properties": { "status": {"type": "string", "enum": ["ACTIVE", "INTERRUPTED", "GRADUATED"]} }
+      },
+      "Created": { "type": "object", "required": ["sub"], "properties": {"sub": {"type": "string"}} },
+      "Toggled": { "type": "object", "required": ["enabled"], "properties": {"enabled": {"type": "boolean"}} },
+      "InspectCourse": {
+        "type": "object",
+        "required": ["code", "title", "ects", "faculty"],
+        "properties": { "code": {"type": "string"}, "title": {"type": "string"}, "ects": {"type": "integer"}, "faculty": {"type": "string"} }
+      },
+      "InspectOffering": {
+        "type": "object",
+        "required": ["id", "code", "semester", "teacher", "enrolled", "capacity", "is_open"],
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "code": { "type": "string" },
+          "semester": { "type": "string" },
+          "teacher": { "type": "string" },
+          "enrolled": { "type": "integer" },
+          "capacity": { "type": "integer" },
+          "is_open": { "type": "boolean" }
+        }
+      },
+      "TeacherOption": {
+        "type": "object",
+        "required": ["sub", "name", "faculty"],
+        "properties": { "sub": {"type": "string"}, "name": {"type": "string"}, "faculty": {"type": ["string", "null"]} }
+      },
+      "InspectCourses": {
+        "type": "object",
+        "required": ["courses", "offerings", "teachers"],
+        "properties": {
+          "courses": { "type": "array", "items": {"$ref": "#/components/schemas/InspectCourse"} },
+          "offerings": { "type": "array", "items": {"$ref": "#/components/schemas/InspectOffering"} },
+          "teachers": { "type": "array", "items": {"$ref": "#/components/schemas/TeacherOption"} }
+        }
+      },
+      "NewCourse": {
+        "type": "object",
+        "required": ["code", "title", "ects_credits", "faculty_code"],
+        "properties": { "code": {"type": "string"}, "title": {"type": "string"}, "ects_credits": {"type": "integer"}, "faculty_code": {"type": "string"} }
+      },
+      "NewOffering": {
+        "type": "object",
+        "required": ["course_code", "semester", "teacher_sub", "capacity"],
+        "properties": {
+          "course_code": { "type": "string" },
+          "semester": { "type": "string" },
+          "teacher_sub": { "type": "string" },
+          "capacity": { "type": "integer" }
+        }
+      },
+      "StaffMember": {
+        "type": "object",
+        "required": ["sub", "name", "email", "role", "faculty", "enabled"],
+        "properties": {
+          "sub": { "type": "string" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "$ref": "#/components/schemas/Role" },
+          "faculty": { "type": ["string", "null"] },
+          "enabled": { "type": "boolean" }
+        }
+      },
+      "NewStaff": {
+        "type": "object",
+        "required": ["email", "first_name", "last_name", "role", "password"],
+        "properties": {
+          "email": { "type": "string" },
+          "first_name": { "type": "string" },
+          "last_name": { "type": "string" },
+          "role": { "$ref": "#/components/schemas/Role" },
+          "faculty_code": { "type": ["string", "null"] },
+          "password": { "type": "string" }
+        }
+      },
+      "ModuleSummary": {
+        "type": "object",
+        "required": ["client_id", "name", "redirect_uris", "directory", "created"],
+        "properties": {
+          "client_id": { "type": "string" },
+          "name": { "type": "string" },
+          "redirect_uris": { "type": "array", "items": {"type": "string"} },
+          "directory": { "type": "boolean" },
+          "created": { "type": "string" }
         }
       }
     }
