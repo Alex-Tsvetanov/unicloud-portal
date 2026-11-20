@@ -33,7 +33,7 @@ The portal publishes one versioned stylesheet: colours, fonts, spacing, light an
 - **Works with:** anything that outputs HTML. Thymeleaf, JSP, React, Angular, Vue.
 - **You build:** your own markup, using our class names.
 - **Runtime link to the portal:** none after the first load (the file is cached; a new major version gets a new path, `v2`). You can also copy the file into your own static files.
-- **Status:** built. Live at `/ui/v1/unicloud.css`. The class names are listed in the package README.
+- **Status:** built. Live at `/ui/v1/unicloud.css` (staging: https://unicloud-portal-staging-tszc.onrender.com/ui/v1/unicloud.css). The class names are listed in the package README.
 - **Effort:** Team 1 done; your team small.
 
 ### Variant B: server-fetched HTML fragments
@@ -86,7 +86,7 @@ Components in 1.0.0: `TopBar`, `PageHeader`, `Card`, `Button`, form fields, `Ale
 - **Works with:** React 19 apps. Angular and Vue apps can use variant A's classes instead.
 - **You build:** you pass the data in, and keep your own routing and state.
 - **Runtime link to the portal:** none. The package is part of your build.
-- **Status:** built. The portal itself uses these components.
+- **Status:** built. The portal itself uses these components. Staging download: https://unicloud-portal-staging-tszc.onrender.com/ui/v1/unicloud-ui-1.0.0.tgz
 - **Effort:** Team 1 done; your team small.
 
 ### Variant D: data only
