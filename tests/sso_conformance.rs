@@ -55,7 +55,7 @@ async fn full_login_flow_tokens_userinfo_and_replay() {
     assert_eq!(jwt_header(t["id_token"].as_str().unwrap())["alg"], "RS256");
     assert_eq!(jwt_header(t["id_token"].as_str().unwrap())["kid"], p.st.keys.kid);
     assert_eq!(id["sub"], uid.to_string(), "sub is a JSON string");
-    assert_eq!(id["aud"], json!([client]));
+    assert_eq!(id["aud"], client, "aud is a plain string, as the Java portal sent");
     assert_eq!(id["azp"], client);
     assert_eq!(id["iss"], p.base);
     assert_eq!(id["nonce"], "n-1");

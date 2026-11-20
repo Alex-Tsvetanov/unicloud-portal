@@ -32,7 +32,7 @@
 - [x] 4.4 Token endpoint, single-use codes, replay revocation
 - [x] 4.5 ID token and access token claims, `/userinfo`
 - [x] 4.6 `/connect/logout`, 24 hour grant cleanup
-- [x] 4.7 `sso_conformance` suite green against the golden recording
+- [x] 4.7 `sso_conformance` suite green; `golden_shapes` checks tokens, claims, userinfo, JWKS and error codes against the Java recording
 
 ## 5. Directory and staging
 - [x] 5.1 `client_credentials` grant with the `directory` scope

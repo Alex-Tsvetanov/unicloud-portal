@@ -92,7 +92,9 @@ pub async fn build_app(st: AppState) -> anyhow::Result<Router> {
         .with_http_only(true)
         .with_same_site(SameSite::Lax)
         .with_path("/")
-        .with_expiry(Expiry::OnInactivity(CookieDuration::minutes(30)));
+        .with_expiry(Expiry::OnInactivity(CookieDuration::minutes(30)))
+        // Every request moves the idle timeout ("30 minutes without use"), not only requests that write
+        .with_always_save(true);
 
     // Pages: cookie session plus CSRF on every state change
     let ui = ui_routes().layer(middleware::from_fn(web::csrf::require_csrf));

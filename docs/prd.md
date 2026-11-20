@@ -1,6 +1,6 @@
 # PRD: UniCloud Portal, week 1 (Rust rewrite)
 
-Status: accepted design, not built (2026-11-20)
+Status: built on branch `rust-rewrite`, not yet deployed (2026-11-20)
 Owner: Team 1, "Portal and Identity"
 Sources: the Moodle project brief (MCSE06, "Проект 1: UniCloud"), the week 1 brief from the Rector's office (`01-week`), the other teams' interface sheet (`ServiceInteraction.xlsx`), and [docs/sso.md](sso.md).
 Related: [GLOSSARY.md](../GLOSSARY.md), [ADRs](adr/), [design](../openspec/changes/rust-rewrite/design.md), [specs](../openspec/changes/rust-rewrite/specs/), [SLO](slo.md).

@@ -175,6 +175,15 @@ impl Browser {
         self.send(self.http.get(self.url(path)).bearer_auth(token)).await
     }
 
+    /// The session cookie's value (the session id)
+    pub fn cookie_value(&self) -> Option<String> {
+        self.cookie
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|c| c.split_once('=').map(|(_, v)| v.to_string()))
+    }
+
     pub fn has_cookie(&self) -> bool {
         self.cookie.lock().unwrap().is_some()
     }

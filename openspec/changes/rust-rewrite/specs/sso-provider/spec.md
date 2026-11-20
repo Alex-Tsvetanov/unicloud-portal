@@ -113,11 +113,11 @@ A second exchange of the same code MUST fail with 400 `invalid_grant` and MUST r
 - **THEN** at most one gets 200, the other gets `invalid_grant`, and any issued access token is revoked
 
 ### Requirement: ID token
-The ID token SHALL be a JWT with `iss`, `sub` (the user id as a JSON string), `aud` (an array with the module's client id), `azp` (the client id), `iat`, `exp` (30 minutes after `iat`), `auth_time` (integer seconds when the password was typed), `nonce` when one was sent, and the user claims of the granted scopes, read from the database when the token is issued.
+The ID token SHALL be a JWT with `iss`, `sub` (the user id as a JSON string), `aud` (the module's client id as a JSON string, as the Java portal sent), `azp` (the client id), `iat`, `exp` (30 minutes after `iat`), `auth_time` (integer seconds when the password was typed), `nonce` when one was sent, and the user claims of the granted scopes, read from the database when the token is issued.
 
 #### Scenario: Claim types
 - **WHEN** user 4 logs in with nonce `n-1`
-- **THEN** the ID token has `"sub": "4"`, `aud` as an array containing the client id, and `"nonce": "n-1"`
+- **THEN** the ID token has `"sub": "4"`, `aud` equal to the client id, and `"nonce": "n-1"`
 
 ### Requirement: User claims by scope
 Scope `email` SHALL give `email`. Scope `profile` SHALL give `given_name`, `family_name` and `name` (given and family name joined by one space). Scope `unicloud` SHALL give `role`, `permissions`, `faculty` (`{"code", "name"}`, only when the user has a faculty) and `student` (`{"faculty_number", "specialty", "study_year", "status"}`, only for students; `study_year` is an integer). Claims of scopes not granted MUST be absent.
@@ -131,7 +131,7 @@ Scope `email` SHALL give `email`. Scope `profile` SHALL give `given_name`, `fami
 - **THEN** the ID token has `role` and `permissions` and no `faculty`
 
 ### Requirement: Access token
-The access token SHALL be an RS256 JWT with `iss`, `sub`, `aud` (an array with the client id), `client_id`, `scope`, `iat`, `exp` (30 minutes) and `jti`. It SHALL work only at `/userinfo` (authorization-code tokens) or at the directory API (client-credentials tokens with scope `directory`).
+The access token SHALL be an RS256 JWT with `iss`, `sub`, `aud` (the client id as a JSON string), `client_id`, `scope`, `iat`, `exp` (30 minutes) and `jti`. It SHALL work only at `/userinfo` (authorization-code tokens) or at the directory API (client-credentials tokens with scope `directory`).
 
 #### Scenario: Token on a portal page
 - **WHEN** a module sends its access token as Bearer to `/profile`

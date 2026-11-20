@@ -7,10 +7,10 @@ Vocabulary: [GLOSSARY.md](../GLOSSARY.md). Decisions: [docs/adr](../docs/adr/). 
 
 ## Tech stack
 - Rust (stable), axum 0.8, tower-http, tower-sessions with a PostgreSQL store
-- sqlx 0.9 on PostgreSQL 17, migrations embedded and applied at start, offline query data committed
-- jsonwebtoken 12 (pure Rust backend) for RS256, argon2 for passwords
+- sqlx 0.9 on PostgreSQL 17, migrations embedded and applied at start under an advisory lock; queries checked at run time by the tests
+- jsonwebtoken 12 (pure Rust backend) for RS256, argon2 for passwords, SHA-256 for client secrets
 - Maud components and htmx 2.0.x, served from the binary, no JavaScript build
-- Tests: cargo test, axum-test, reqwest, testcontainers
+- Tests: cargo test; black-box suites start the real router on a random port and drive it with reqwest against PostgreSQL
 - Docker (cargo-chef, slim glibc base). Staging on Render (Blueprint `render.yaml`). Production on Azure Container Apps
 
 ## Conventions

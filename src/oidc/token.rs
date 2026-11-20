@@ -168,12 +168,12 @@ async fn authorization_code(st: &AppState, client: &Client, iss: &str, f: &Token
     let (iat, exp) = (now(), now() + TOKEN_TTL_SECS);
     let (access_jti, id_jti) = (Uuid::new_v4(), Uuid::new_v4());
     let access = json!({
-        "iss": iss, "sub": user.id.to_string(), "aud": [client.client_id], "client_id": client.client_id,
+        "iss": iss, "sub": user.id.to_string(), "aud": client.client_id, "client_id": client.client_id,
         "scope": scopes, "iat": iat, "nbf": iat, "exp": exp, "jti": access_jti.to_string(),
     });
     let mut id = user.for_scopes(&scopes);
     id.insert("iss".into(), json!(iss));
-    id.insert("aud".into(), json!([client.client_id]));
+    id.insert("aud".into(), json!(client.client_id));
     id.insert("azp".into(), json!(client.client_id));
     id.insert("iat".into(), json!(iat));
     id.insert("exp".into(), json!(exp));
@@ -210,7 +210,7 @@ async fn client_credentials(st: &AppState, client: &Client, iss: &str, f: &Token
     }
     let (iat, exp, jti) = (now(), now() + TOKEN_TTL_SECS, Uuid::new_v4());
     let claims = json!({
-        "iss": iss, "sub": client.client_id, "aud": [DIRECTORY_AUDIENCE], "client_id": client.client_id,
+        "iss": iss, "sub": client.client_id, "aud": DIRECTORY_AUDIENCE, "client_id": client.client_id,
         "scope": [DIRECTORY_SCOPE], "iat": iat, "nbf": iat, "exp": exp, "jti": jti.to_string(),
     });
     let token = st.keys.sign_typed(&claims, Some("at+jwt"))?;
