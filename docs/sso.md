@@ -84,6 +84,7 @@ If the user already has a portal SSO session, step 4 is skipped: the portal send
 | `GET /userinfo` | The user's claims, for a module's access token. |
 | `GET /connect/logout` | Ends the portal's SSO session. See [Logout](#logout). |
 | `GET /api/v1/directory/...` | Read who is who, with no user present. See [The directory API](#the-directory-api). |
+| `GET /api-docs` | Interactive API reference (Swagger UI) for every endpoint a module's backend calls. The machine-readable file is `GET /openapi.json` (OpenAPI 3.1). |
 
 ## What a module must build
 
@@ -278,7 +279,7 @@ Grades and materials are not here: they belong to Team 3 and Team 2.
 
 A module team tests its own changes on its own machine against the portal's **staging** deployment. No local copy of the portal is needed.
 
-**Staging address:** `https://unicloud-portal-staging-tszc.onrender.com`. It runs the new Rust portal: register your module and create your test users again, because the old registrations and users are not carried over.
+**Staging address:** `https://unicloud-portal-staging-tszc.onrender.com`. The API reference is at [`/api-docs`](https://unicloud-portal-staging-tszc.onrender.com/api-docs). It runs the new Rust portal: register your module and create your test users again, because the old registrations and users are not carried over.
 
 Staging has two things production does not:
 

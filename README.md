@@ -4,7 +4,7 @@ The Unified University Portal: accounts, academic profiles, the course catalogue
 
 **Stack:** Rust · axum · sqlx · PostgreSQL 17 · Maud components with htmx (server-rendered, no JavaScript build) · Docker · GitHub Actions · Render (staging) · Azure Container Apps (production)
 
-**Staging (Render):** https://unicloud-portal-staging-tszc.onrender.com (staging tools at `/staging`)
+**Staging (Render):** https://unicloud-portal-staging-tszc.onrender.com (staging tools at `/staging`, API reference at `/api-docs`)
 
 **Design and decisions:** [docs/prd.md](docs/prd.md) (what and why), [openspec/changes/rust-rewrite/design.md](openspec/changes/rust-rewrite/design.md) (how), [openspec/changes/rust-rewrite/specs/](openspec/changes/rust-rewrite/specs/) (the requirements, testable), [docs/adr/](docs/adr/) (decisions), [GLOSSARY.md](GLOSSARY.md) (words), [docs/slo.md](docs/slo.md) (the uptime promise), [docs/sso.md](docs/sso.md) (for module teams).
 
@@ -52,8 +52,9 @@ src/
   ui/                   Maud components and pages
   web/                  session, current user, CSRF
   ops.rs                /health, X-Served-By, hourly cleanup
+api/openapi.json        the OpenAPI 3.1 file behind /openapi.json and /api-docs (tests/api_docs.rs keeps it in step with the routes)
 migrations/             SQL migrations, applied at start
-assets/                 htmx.min.js (2.0.11), app.css, app.js
+assets/                 htmx.min.js (2.0.11), app.css, app.js, swagger/ (Swagger UI 5.17.14)
 config/                 sso-callback-hosts.txt: production's allowed callback hosts
 tests/                  black-box suites, the Java staging recording, a test-only key
 docs/, openspec/        PRD, design, specs, ADRs, SLO, SSO guide
@@ -158,6 +159,7 @@ Old and new replicas run side by side for a minute during every deploy, so each 
 - **Never change a published name.** Roles, permission names and their bit positions, claim names and endpoint paths in `docs/sso.md` only grow ([ADR 0002](docs/adr/0002-grow-the-sso-contract.md)).
 - **Check permissions, not roles.** Every handler asks `user.can(Permission::...)`.
 - **Every state-changing form carries the CSRF token.** The layout sends it automatically for htmx requests.
+- **A new or changed module-facing route also changes `api/openapi.json`.** `tests/api_docs.rs` fails otherwise.
 - **UI text is Bulgarian; code, logs and docs are English.**
 - **Never log a password, secret, token or code.**
 

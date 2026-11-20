@@ -16,6 +16,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
 COPY migrations/ migrations/
 COPY config/ config/
+COPY api/ api/
 RUN cargo build --release --locked && strip target/release/unicloud-portal
 
 # Run stage: slim Debian, CA certificates (for TLS to the database), the binary and the assets

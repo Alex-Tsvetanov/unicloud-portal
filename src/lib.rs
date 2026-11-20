@@ -5,6 +5,7 @@
 
 pub mod access;
 pub mod accounts;
+pub mod api_docs;
 pub mod api_error;
 pub mod config;
 pub mod crypto;
@@ -102,6 +103,8 @@ pub async fn build_app(st: AppState) -> anyhow::Result<Router> {
     // Machine endpoints: no CSRF (they use client authentication or Bearer tokens)
     let machine = Router::new()
         .route("/health", get(ops::health))
+        .route("/openapi.json", get(api_docs::openapi))
+        .route("/api-docs", get(api_docs::page))
         .route("/.well-known/openid-configuration", get(oidc::discovery::discovery))
         .route("/oauth2/jwks", get(oidc::discovery::jwks))
         .route("/oauth2/authorize", get(oidc::authorize::authorize))
