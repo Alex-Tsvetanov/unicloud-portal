@@ -22,5 +22,5 @@
 - [x] 4.3 Docker Node stage, CI `web` job
 - [x] 4.4 Checked in a browser on a local server: sign-in return, catalogue, enroll, cancel, sign-out, every staff and inspector form, module secret, status change, teacher reject, phone width
 - [x] 4.4a Installed `@unicloud/ui` from the portal in an empty project (TypeScript build and import pass; React stays external)
-- [ ] 4.5 Checked on staging after deploy
+- [x] 4.5 Checked on staging after deploy (4736568): app, 401 JSON, package and stylesheet with CORS, missing asset 404, package installs from staging
 - [ ] 4.6 Ask the other teams which components they need (see `docs/proposals/ui-sharing.md`)
