@@ -1,0 +1,662 @@
+{
+  "base": "https://unicloud-portal-staging-tszc.onrender.com",
+  "recorded_at": "2026-11-20T15:10:15Z",
+  "steps": {
+    "discovery": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "issuer": "https://unicloud-portal-staging-tszc.onrender.com",
+        "authorization_endpoint": "https://unicloud-portal-staging-tszc.onrender.com/oauth2/authorize",
+        "token_endpoint": "https://unicloud-portal-staging-tszc.onrender.com/oauth2/token",
+        "token_endpoint_auth_methods_supported": [
+          "client_secret_basic",
+          "client_secret_post",
+          "client_secret_jwt",
+          "private_key_jwt",
+          "tls_client_auth",
+          "self_signed_tls_client_auth"
+        ],
+        "jwks_uri": "https://unicloud-portal-staging-tszc.onrender.com/oauth2/jwks",
+        "userinfo_endpoint": "https://unicloud-portal-staging-tszc.onrender.com/userinfo",
+        "end_session_endpoint": "https://unicloud-portal-staging-tszc.onrender.com/connect/logout",
+        "response_types_supported": [
+          "code"
+        ],
+        "grant_types_supported": [
+          "authorization_code",
+          "client_credentials",
+          "refresh_token",
+          "urn:ietf:params:oauth:grant-type:token-exchange"
+        ],
+        "revocation_endpoint": "https://unicloud-portal-staging-tszc.onrender.com/oauth2/revoke",
+        "revocation_endpoint_auth_methods_supported": [
+          "client_secret_basic",
+          "client_secret_post",
+          "client_secret_jwt",
+          "private_key_jwt",
+          "tls_client_auth",
+          "self_signed_tls_client_auth"
+        ],
+        "introspection_endpoint": "https://unicloud-portal-staging-tszc.onrender.com/oauth2/introspect",
+        "introspection_endpoint_auth_methods_supported": [
+          "client_secret_basic",
+          "client_secret_post",
+          "client_secret_jwt",
+          "private_key_jwt",
+          "tls_client_auth",
+          "self_signed_tls_client_auth"
+        ],
+        "code_challenge_methods_supported": [
+          "S256"
+        ],
+        "tls_client_certificate_bound_access_tokens": true,
+        "dpop_signing_alg_values_supported": [
+          "RS256",
+          "RS384",
+          "RS512",
+          "PS256",
+          "PS384",
+          "PS512",
+          "ES256",
+          "ES384",
+          "ES512"
+        ],
+        "subject_types_supported": [
+          "public"
+        ],
+        "id_token_signing_alg_values_supported": [
+          "RS256"
+        ],
+        "scopes_supported": [
+          "openid"
+        ]
+      },
+      "body_head": null,
+      "note": null
+    },
+    "jwks": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json;charset=ISO-8859-1",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "keys": [
+          {
+            "kty": "RSA",
+            "e": "AQAB",
+            "kid": "oAJiXYaMhH3prg8JgOEYn4wHyqUn1GjNFJXD47fKXV8",
+            "n": "<342 chars>"
+          }
+        ]
+      },
+      "body_head": null,
+      "note": null
+    },
+    "health": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "status": "ok",
+        "version": "dev"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "root": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "version": "dev",
+        "service": "unicloud-portal",
+        "replica": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "register_client": {
+      "status": 201,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "clientId": "golden-5d2f81",
+        "clientSecret": "<43 chars>",
+        "redirectUris": [
+          "http://localhost:9/cb"
+        ],
+        "postLogoutRedirectUris": [
+          "http://localhost:9/out"
+        ]
+      },
+      "body_head": null,
+      "note": null
+    },
+    "register_client_bad_id": {
+      "status": 400,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "timestamp": "2026-11-20T15:10:31.651674454Z",
+        "status": 400,
+        "error": "Bad Request",
+        "message": "Validation failed",
+        "path": "/api/v1/staging/sso-clients",
+        "fieldErrors": [
+          {
+            "field": "clientId",
+            "message": "must be 2 to 63 lower-case letters, digits or dashes"
+          }
+        ]
+      },
+      "body_head": null,
+      "note": null
+    },
+    "register_client_duplicate": {
+      "status": 409,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "timestamp": "2026-11-20T15:10:31.746697120Z",
+        "status": 409,
+        "error": "Conflict",
+        "message": "SSO client already exists with clientId: 'golden-5d2f81'",
+        "path": "/api/v1/staging/sso-clients",
+        "fieldErrors": null
+      },
+      "body_head": null,
+      "note": null
+    },
+    "staging_roles": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "permissions": [
+          "STAFF_CREATE",
+          "STUDENT_CREATE",
+          "STUDENT_PROFILE_READ_OWN",
+          "STUDENT_PROFILE_READ_ANY",
+          "STUDENT_PROFILE_READ_ENROLLED",
+          "COURSE_CREATE_MODIFY",
+          "COURSE_OFFERING_READ",
+          "COURSE_OFFERING_CREATE_MODIFY",
+          "ENROLLMENT_REQUEST_CREATE",
+          "ENROLLMENT_REQUEST_ACCEPT_REJECT"
+        ],
+        "roleDefaults": {
+          "ADMIN": [
+            "STAFF_CREATE"
+          ],
+          "INSPECTOR": [
+            "STUDENT_CREATE",
+            "STUDENT_PROFILE_READ_ANY",
+            "COURSE_CREATE_MODIFY",
+            "COURSE_OFFERING_READ",
+            "COURSE_OFFERING_CREATE_MODIFY"
+          ],
+          "TEACHER": [
+            "STUDENT_PROFILE_READ_ENROLLED",
+            "COURSE_OFFERING_READ",
+            "ENROLLMENT_REQUEST_ACCEPT_REJECT"
+          ],
+          "STUDENT": [
+            "STUDENT_PROFILE_READ_OWN",
+            "COURSE_OFFERING_READ",
+            "ENROLLMENT_REQUEST_CREATE"
+          ]
+        }
+      },
+      "body_head": null,
+      "note": null
+    },
+    "create_user": {
+      "status": 201,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "id": 13,
+        "email": "golden.5d2f81@test.tu-sofia.bg",
+        "firstName": "Тест",
+        "lastName": "Записвач",
+        "role": "STUDENT",
+        "permissions": [
+          "STUDENT_PROFILE_READ_OWN",
+          "COURSE_OFFERING_READ",
+          "ENROLLMENT_REQUEST_CREATE"
+        ],
+        "student": true
+      },
+      "body_head": null,
+      "note": null
+    },
+    "portal_login": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "accessToken": "<jwt>",
+        "tokenType": "Bearer",
+        "expiresIn": 1800
+      },
+      "body_head": null,
+      "note": null,
+      "decoded": {
+        "header": {
+          "kid": "oAJiXYaMhH3prg8JgOEYn4wHyqUn1GjNFJXD47fKXV8",
+          "alg": "RS256"
+        },
+        "payload": {
+          "sub": "13",
+          "aud": "unicloud-api",
+          "role": "STUDENT",
+          "permissions": [
+            "STUDENT_PROFILE_READ_OWN",
+            "COURSE_OFFERING_READ",
+            "ENROLLMENT_REQUEST_CREATE"
+          ],
+          "iss": "unicloud-portal",
+          "exp": 1795189233,
+          "iat": 1795187433
+        }
+      }
+    },
+    "authorize_no_session": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "https://unicloud-portal-staging-tszc.onrender.com/login.html?sso=1",
+        "Set-Cookie": "<value>; Path=/; Secure; HttpOnly; SameSite=Lax"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "sso_session": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Set-Cookie": "<value>; Path=/; Secure; HttpOnly; SameSite=Lax",
+        "X-Served-By": "srv-dbv25cuk1f9s73b6m4l0-hibernate-66f4b8bf48-rp5mv"
+      },
+      "json": {
+        "continueUrl": "/oauth2/authorize?response_type=code&client_id=golden-5d2f81&redirect_uri=http%3A%2F%2Flocalhost%3A9%2Fcb&scope=openid+profile+email+unicloud&state=st-5d2f81&nonce=n-5d2f81&code_challenge=_iLVGpuDthwMVu0e36a7K-Zjc6dpc576jVo2r9Ah1z4&code_challenge_method=S256&continue"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "authorize_with_session": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "http://localhost:9/cb?code=%3Credacted%3E&state=st-5d2f81"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "token": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "access_token": "<jwt>",
+        "scope": "openid profile unicloud email",
+        "id_token": "<jwt>",
+        "token_type": "Bearer",
+        "expires_in": 1799
+      },
+      "body_head": null,
+      "note": null,
+      "id_token": {
+        "header": {
+          "kid": "oAJiXYaMhH3prg8JgOEYn4wHyqUn1GjNFJXD47fKXV8",
+          "alg": "RS256"
+        },
+        "payload": {
+          "sub": "13",
+          "role": "STUDENT",
+          "student": {
+            "faculty_number": "990997a1e",
+            "specialty": "Компютърни науки",
+            "study_year": 2,
+            "status": "ACTIVE"
+          },
+          "iss": "https://unicloud-portal-staging-tszc.onrender.com",
+          "given_name": "Тест",
+          "nonce": "n-5d2f81",
+          "sid": "xWtxV-24Llrsbz2K2gGIkkXe1eTij0lmqfNx8dGOl_E",
+          "aud": "golden-5d2f81",
+          "azp": "golden-5d2f81",
+          "permissions": [
+            "STUDENT_PROFILE_READ_OWN",
+            "COURSE_OFFERING_READ",
+            "ENROLLMENT_REQUEST_CREATE"
+          ],
+          "auth_time": 1795187433,
+          "name": "Тест Записвач",
+          "exp": 1795189235,
+          "iat": 1795187435,
+          "family_name": "Записвач",
+          "jti": "d81488bc-1b79-4186-9333-a29323793f25",
+          "email": "golden.5d2f81@test.tu-sofia.bg"
+        }
+      },
+      "access_token_decoded": {
+        "header": {
+          "kid": "oAJiXYaMhH3prg8JgOEYn4wHyqUn1GjNFJXD47fKXV8",
+          "alg": "RS256"
+        },
+        "payload": {
+          "sub": "13",
+          "aud": "golden-5d2f81",
+          "nbf": 1795187435,
+          "scope": [
+            "openid",
+            "profile",
+            "unicloud",
+            "email"
+          ],
+          "iss": "https://unicloud-portal-staging-tszc.onrender.com",
+          "exp": 1795189235,
+          "iat": 1795187435,
+          "jti": "60766144-c8db-4740-9177-2ccf1c68f439"
+        }
+      }
+    },
+    "userinfo": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "sub": "13",
+        "email": "golden.5d2f81@test.tu-sofia.bg",
+        "given_name": "Тест",
+        "family_name": "Записвач",
+        "name": "Тест Записвач",
+        "role": "STUDENT",
+        "permissions": [
+          "STUDENT_PROFILE_READ_OWN",
+          "COURSE_OFFERING_READ",
+          "ENROLLMENT_REQUEST_CREATE"
+        ],
+        "student": {
+          "faculty_number": "990997a1e",
+          "specialty": "Компютърни науки",
+          "study_year": 2,
+          "status": "ACTIVE"
+        }
+      },
+      "body_head": null,
+      "note": null
+    },
+    "userinfo_post": {
+      "status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "sub": "13",
+        "email": "golden.5d2f81@test.tu-sofia.bg",
+        "given_name": "Тест",
+        "family_name": "Записвач",
+        "name": "Тест Записвач",
+        "role": "STUDENT",
+        "permissions": [
+          "STUDENT_PROFILE_READ_OWN",
+          "COURSE_OFFERING_READ",
+          "ENROLLMENT_REQUEST_CREATE"
+        ],
+        "student": {
+          "faculty_number": "990997a1e",
+          "specialty": "Компютърни науки",
+          "study_year": 2,
+          "status": "ACTIVE"
+        }
+      },
+      "body_head": null,
+      "note": null
+    },
+    "userinfo_no_token": {
+      "status": 401,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_token"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "userinfo_with_id_token": {
+      "status": 401,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_token"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "api_with_module_token": {
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "token_replay": {
+      "status": 400,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_grant"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "userinfo_after_replay": {
+      "status": 401,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_token"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "token_bad_verifier": {
+      "status": 400,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_grant"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "token_bad_secret": {
+      "status": 401,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_client"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "token_client_secret_post": {
+      "status": 401,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "invalid_client"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "token_client_credentials": {
+      "status": 400,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error": "unauthorized_client"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "token_unsupported_grant": {
+      "status": 400,
+      "headers": {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": {
+        "error_description": "OAuth 2.0 Parameter: grant_type",
+        "error": "unsupported_grant_type",
+        "error_uri": "https://datatracker.ietf.org/doc/html/rfc6749#section-5.2"
+      },
+      "body_head": null,
+      "note": null
+    },
+    "authorize_no_pkce": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "http://localhost:9/cb?error=invalid_request&error_description=OAuth+2.0+Parameter%3A+code_challenge&error_uri=https%3A%2F%2Fdatatracker.ietf.org%2Fdoc%2Fhtml%2Frfc7636%23section-4.4.1&state=st-5d2f81"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_bad_scope": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "http://localhost:9/cb?error=invalid_scope&error_description=OAuth+2.0+Parameter%3A+scope&error_uri=https%3A%2F%2Fdatatracker.ietf.org%2Fdoc%2Fhtml%2Frfc6749%23section-4.1.2.1&state=st-5d2f81"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_openid_only_no_nonce": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "http://localhost:9/cb?code=%3Credacted%3E&state=st-5d2f81"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_bad_response_type": {
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_unknown_client": {
+      "status": 401,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_plain_pkce": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "http://localhost:9/cb?error=invalid_request&error_description=OAuth+2.0+Parameter%3A+code_challenge_method&error_uri=https%3A%2F%2Fdatatracker.ietf.org%2Fdoc%2Fhtml%2Frfc7636%23section-4.4.1&state=st-5d2f81"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_json_accept_no_session_skipped": {
+      "status": 0,
+      "headers": {},
+      "json": null,
+      "body_head": "",
+      "note": "not recorded: needs a fresh jar"
+    },
+    "logout": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "http://localhost:9/out?state=bye",
+        "Set-Cookie": "<value>; Max-Age=0; Expires=Thu, 1 Jan 1970 00:00:00 GMT; Path=/; Secure; HttpOnly; SameSite=Lax"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    },
+    "authorize_after_logout": {
+      "status": 302,
+      "headers": {
+        "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+        "Location": "https://unicloud-portal-staging-tszc.onrender.com/login.html?sso=1",
+        "Set-Cookie": "<value>; Path=/; Secure; HttpOnly; SameSite=Lax"
+      },
+      "json": null,
+      "body_head": "",
+      "note": null
+    }
+  }
+}

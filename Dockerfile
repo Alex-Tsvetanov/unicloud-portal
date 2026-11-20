@@ -1,39 +1,47 @@
-# Build stage: package the app, then build a Java runtime that holds only the modules it uses.
-# Alpine (musl) on both stages, because a jlink runtime only runs on the libc it was built for.
-FROM eclipse-temurin:25-jdk-alpine AS build
+# UniCloud Portal (Rust). cargo-chef caches the dependency build in its own layer, so a code change
+# rebuilds only the portal itself. Migrations and the SQL are compiled in; no database at build time.
+# A Node stage builds the React app (served at /app) and packs @unicloud/ui (served at /ui/v1).
+
+FROM node:22-bookworm-slim AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+COPY web/packages/ui/package.json packages/ui/
+COPY web/apps/portal/package.json apps/portal/
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build && npm run pack:ui && cp packages/ui/dist/unicloud.css dist-ui/unicloud.css
+
+FROM rust:1-slim-bookworm AS chef
+RUN cargo install cargo-chef --locked --version 0.1.78
 WORKDIR /src
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-RUN chmod +x mvnw && ./mvnw -B -q dependency:go-offline
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS build
+COPY --from=planner /src/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
-RUN ./mvnw -B -q -DskipTests package && cp target/*.jar app.jar
+COPY migrations/ migrations/
+COPY config/ config/
+COPY api/ api/
+RUN cargo build --release --locked && strip target/release/unicloud-portal
 
-# Split the fat jar into Spring Boot's layers (dependencies change rarely, application on every
-# commit), so each deploy pushes and pulls only the small application layer.
-RUN java -Djarmode=tools -jar app.jar extract --layers --destination /layers
-
-# Modules found by jdeps, plus ones looked up by name at runtime, which jdeps can't see:
-# jdk.charsets (extra charsets for the MySQL connector), jdk.zipfs and jdk.management.
-RUN MODULES="$(jdeps --ignore-missing-deps -q --recursive --multi-release 25 --print-module-deps \
-        --class-path '/layers/dependencies/lib/*' /layers/application/app.jar)" \
- && echo "jdeps modules: $MODULES" \
- && jlink --add-modules "$MODULES,jdk.charsets,jdk.zipfs,jdk.management" \
-        --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
-        --output /jre
-
-# Run stage: plain Alpine, the trimmed runtime and the app layers
-FROM alpine:3.23
-ENV JAVA_HOME=/opt/java
-ENV PATH="$JAVA_HOME/bin:$PATH"
-COPY --from=build /jre $JAVA_HOME
+# Run stage: slim Debian, CA certificates (for TLS to the database), the binary and the assets
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /layers/dependencies/ ./
-COPY --from=build /layers/spring-boot-loader/ ./
-COPY --from=build /layers/snapshot-dependencies/ ./
-COPY --from=build /layers/application/ ./
+COPY --from=build /src/target/release/unicloud-portal /app/unicloud-portal
+COPY assets/ /app/assets/
+COPY --from=web /src/web/apps/portal/dist/ /app/web/
+COPY --from=web /src/web/dist-ui/ /app/ui/
 ARG GIT_SHA=dev
-ENV GIT_SHA=$GIT_SHA
+ENV GIT_SHA=$GIT_SHA \
+    APP_ASSETS_DIR=/app/assets     APP_WEB_DIR=/app/web     APP_UI_DIR=/app/ui \
+    PORT=8080 \
+    RUST_LOG=info,sqlx=warn
 EXPOSE 8080
-# Numeric uid:gid; Alpine has no user 1000, so without the gid the process would run in group root
 USER 1000:1000
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
+ENTRYPOINT ["/app/unicloud-portal"]

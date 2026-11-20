@@ -1,0 +1,215 @@
+/* @unicloud/ui. A quiet academic register: ink on paper, one oxblood accent, serif headings,
+   tabular numbers. Every class starts with "uc-" so it does not clash with a host app. */
+
+:root,
+[data-theme="light"] {
+  --uc-paper: #f6f3ee;
+  --uc-card: #fffdf9;
+  --uc-ink: #1d1b19;
+  --uc-ink-2: #57524c;
+  --uc-rule: #e2dcd2;
+  --uc-accent: #8c1c2b;
+  --uc-accent-ink: #fff;
+  --uc-ok: #2f6b3f;
+  --uc-ok-bg: #e5f0e7;
+  --uc-warn: #8a5a00;
+  --uc-warn-bg: #f7ecd5;
+  --uc-err: #a2232f;
+  --uc-err-bg: #f8e3e4;
+  --uc-info: #23527a;
+  --uc-info-bg: #e2ecf5;
+  --uc-focus: #23527a;
+  --uc-shadow: 0 1px 0 rgba(29, 27, 25, .04), 0 8px 24px -12px rgba(29, 27, 25, .18);
+  --uc-radius-s: 6px;
+  --uc-radius-l: 14px;
+  --uc-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --uc-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --uc-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --uc-dur: 140ms;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --uc-paper: #141312;
+    --uc-card: #1d1b19;
+    --uc-ink: #efeae3;
+    --uc-ink-2: #a9a29a;
+    --uc-rule: #34302c;
+    --uc-accent: #e0707e;
+    --uc-accent-ink: #1d1b19;
+    --uc-ok: #8fd19f; --uc-ok-bg: #1d3023;
+    --uc-warn: #f0c46b; --uc-warn-bg: #352a12;
+    --uc-err: #f08a93; --uc-err-bg: #3a1c1f;
+    --uc-info: #9cc6ec; --uc-info-bg: #182a3a;
+    --uc-focus: #9cc6ec;
+    --uc-shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 10px 30px -14px rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+}
+
+[data-theme="dark"] {
+  --uc-paper: #141312;
+  --uc-card: #1d1b19;
+  --uc-ink: #efeae3;
+  --uc-ink-2: #a9a29a;
+  --uc-rule: #34302c;
+  --uc-accent: #e0707e;
+  --uc-accent-ink: #1d1b19;
+  --uc-ok: #8fd19f; --uc-ok-bg: #1d3023;
+  --uc-warn: #f0c46b; --uc-warn-bg: #352a12;
+  --uc-err: #f08a93; --uc-err-bg: #3a1c1f;
+  --uc-info: #9cc6ec; --uc-info-bg: #182a3a;
+  --uc-focus: #9cc6ec;
+  --uc-shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 10px 30px -14px rgba(0, 0, 0, .7);
+  color-scheme: dark;
+}
+
+/* Base. Opt in by adding class "uc-root" to <body> or a wrapper. */
+.uc-root {
+  margin: 0; background: var(--uc-paper); color: var(--uc-ink);
+  font: 16px/1.55 var(--uc-sans); min-height: 100vh;
+}
+.uc-root *, .uc-root *::before, .uc-root *::after { box-sizing: border-box; }
+.uc-root a { color: var(--uc-accent); text-underline-offset: 3px; }
+.uc-root :focus-visible { outline: 2px solid var(--uc-focus); outline-offset: 2px; }
+.uc-main { width: 100%; max-width: 1160px; margin: 0 auto; padding: clamp(20px, 4vw, 44px) clamp(16px, 4vw, 48px); }
+.uc-muted { color: var(--uc-ink-2); }
+.uc-small { font-size: .86rem; }
+.uc-mono { font-family: var(--uc-mono); font-size: .9em; }
+.uc-grid { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+.uc-row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+.uc-grow { flex: 1 1 16rem; }
+.uc-form-grid { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+
+/* Top bar */
+.uc-topbar {
+  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  padding: .8rem clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--uc-rule); background: var(--uc-card);
+  position: sticky; top: 0; z-index: 10; font-family: var(--uc-sans);
+}
+.uc-brand { display: flex; align-items: center; gap: .55rem; font-family: var(--uc-serif); font-size: 1.2rem; color: var(--uc-ink); text-decoration: none; font-weight: 600; }
+.uc-brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--uc-accent); color: var(--uc-accent-ink); font-size: 1rem; }
+.uc-nav { display: flex; gap: .25rem; flex-wrap: wrap; flex: 1; }
+.uc-nav a { color: var(--uc-ink-2); text-decoration: none; padding: .35rem .65rem; border-radius: var(--uc-radius-s); font-size: .93rem; transition: background var(--uc-dur), color var(--uc-dur); }
+.uc-nav a:hover, .uc-nav a:focus-visible { background: var(--uc-paper); color: var(--uc-ink); }
+.uc-nav a[aria-current="page"] { color: var(--uc-ink); box-shadow: inset 0 -2px 0 var(--uc-accent); }
+.uc-who { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--uc-ink-2); }
+.uc-who form { margin: 0; }
+
+/* Page header */
+.uc-page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.6rem; }
+.uc-kicker { text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; color: var(--uc-ink-2); margin: 0 0 .4rem; font-weight: 600; }
+.uc-h1, .uc-h2 { font-family: var(--uc-serif); font-weight: 600; letter-spacing: -.01em; line-height: 1.15; margin: 0 0 .5rem; color: var(--uc-ink); }
+.uc-h1 { font-size: clamp(1.7rem, 1.2rem + 2vw, 2.6rem); }
+.uc-h2 { font-size: 1.25rem; }
+.uc-lede { color: var(--uc-ink-2); margin: 0; max-width: 62ch; }
+
+/* Card */
+.uc-card { background: var(--uc-card); border: 1px solid var(--uc-rule); border-radius: var(--uc-radius-l); padding: clamp(16px, 2.5vw, 26px); box-shadow: var(--uc-shadow); margin-bottom: 1.4rem; }
+.uc-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .8rem; flex-wrap: wrap; }
+
+/* Buttons */
+.uc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  font: inherit; font-weight: 600; font-size: .93rem; line-height: 1.2;
+  padding: .55rem 1rem; border-radius: var(--uc-radius-s); border: 1px solid transparent; cursor: pointer;
+  text-decoration: none; transition: background var(--uc-dur), border-color var(--uc-dur), transform var(--uc-dur);
+}
+.uc-btn:active:not(:disabled) { transform: translateY(1px); }
+.uc-btn:focus-visible { outline: 2px solid var(--uc-focus); outline-offset: 2px; }
+.uc-btn:disabled { opacity: .55; cursor: not-allowed; }
+.uc-btn-primary { background: var(--uc-accent); color: var(--uc-accent-ink); }
+.uc-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.uc-btn-secondary { background: var(--uc-card); color: var(--uc-ink); border-color: var(--uc-rule); }
+.uc-btn-secondary:hover:not(:disabled) { border-color: var(--uc-ink-2); }
+.uc-btn-danger { background: var(--uc-err-bg); color: var(--uc-err); border-color: color-mix(in srgb, var(--uc-err) 35%, transparent); }
+.uc-btn-danger:hover:not(:disabled) { background: var(--uc-err); color: var(--uc-card); }
+.uc-btn-link { background: none; color: var(--uc-accent); padding-inline: .2rem; text-decoration: underline; text-underline-offset: 3px; }
+.uc-btn-sm { padding: .32rem .65rem; font-size: .84rem; }
+.uc-btn-lg { padding: .75rem 1.3rem; font-size: 1rem; }
+
+/* Forms */
+.uc-field { display: grid; gap: .3rem; margin-bottom: 1rem; }
+.uc-label { font-weight: 600; font-size: .9rem; color: var(--uc-ink); }
+.uc-hint { font-size: .82rem; color: var(--uc-ink-2); }
+.uc-field-error { font-size: .82rem; color: var(--uc-err); }
+.uc-input, .uc-select, .uc-textarea {
+  font: inherit; color: var(--uc-ink); background: var(--uc-card); width: 100%;
+  border: 1px solid var(--uc-rule); border-radius: var(--uc-radius-s); padding: .55rem .7rem;
+  transition: border-color var(--uc-dur), box-shadow var(--uc-dur);
+}
+.uc-textarea { min-height: 6rem; resize: vertical; }
+.uc-input:focus, .uc-select:focus, .uc-textarea:focus { outline: none; border-color: var(--uc-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--uc-focus) 25%, transparent); }
+.uc-input[aria-invalid="true"], .uc-select[aria-invalid="true"], .uc-textarea[aria-invalid="true"] { border-color: var(--uc-err); }
+.uc-check { display: inline-flex; gap: .5rem; align-items: center; cursor: pointer; }
+.uc-check input { width: 1.05rem; height: 1.05rem; accent-color: var(--uc-accent); }
+
+/* Alerts */
+.uc-alert { display: flex; gap: .6rem; align-items: flex-start; padding: .75rem 1rem; border-radius: var(--uc-radius-s); border: 1px solid transparent; margin-bottom: 1rem; font-size: .95rem; }
+.uc-alert-ok { background: var(--uc-ok-bg); color: var(--uc-ok); border-color: color-mix(in srgb, var(--uc-ok) 30%, transparent); }
+.uc-alert-error { background: var(--uc-err-bg); color: var(--uc-err); border-color: color-mix(in srgb, var(--uc-err) 30%, transparent); }
+.uc-alert-info { background: var(--uc-info-bg); color: var(--uc-info); border-color: color-mix(in srgb, var(--uc-info) 30%, transparent); }
+.uc-alert-body { flex: 1; }
+.uc-alert-close { background: none; border: 0; color: inherit; cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 .2rem; }
+
+/* Badges */
+.uc-badge { display: inline-flex; align-items: center; gap: .3rem; padding: .12rem .55rem; border-radius: 999px; font-size: .76rem; font-weight: 600; letter-spacing: .02em; white-space: nowrap; border: 1px solid transparent; }
+.uc-badge-ok { background: var(--uc-ok-bg); color: var(--uc-ok); }
+.uc-badge-warn { background: var(--uc-warn-bg); color: var(--uc-warn); }
+.uc-badge-err { background: var(--uc-err-bg); color: var(--uc-err); }
+.uc-badge-info { background: var(--uc-info-bg); color: var(--uc-info); }
+.uc-badge-neutral { background: var(--uc-paper); color: var(--uc-ink-2); border-color: var(--uc-rule); }
+.uc-badge-accent { background: var(--uc-accent); color: var(--uc-accent-ink); }
+
+/* Seats meter */
+.uc-seats { display: grid; gap: .3rem; min-width: 8rem; }
+.uc-seats-label { font-size: .82rem; color: var(--uc-ink-2); font-variant-numeric: tabular-nums; }
+.uc-seats-track { height: 6px; border-radius: 999px; background: var(--uc-rule); overflow: hidden; }
+.uc-seats-fill { display: block; height: 100%; background: var(--uc-ok); border-radius: inherit; transform-origin: left; transition: transform 300ms ease-out; }
+.uc-seats[data-level="warn"] .uc-seats-fill { background: var(--uc-warn); }
+.uc-seats[data-level="full"] .uc-seats-fill { background: var(--uc-err); }
+
+/* Table */
+.uc-table-wrap { overflow-x: auto; border: 1px solid var(--uc-rule); border-radius: var(--uc-radius-l); background: var(--uc-card); }
+.uc-table { width: 100%; border-collapse: collapse; font-size: .93rem; }
+.uc-table th, .uc-table td { text-align: left; padding: .65rem .9rem; border-bottom: 1px solid var(--uc-rule); vertical-align: middle; }
+.uc-table th { font-size: .74rem; text-transform: uppercase; letter-spacing: .08em; color: var(--uc-ink-2); font-weight: 600; background: var(--uc-paper); }
+.uc-table tbody tr:last-child td { border-bottom: 0; }
+.uc-table tbody tr:hover td { background: color-mix(in srgb, var(--uc-paper) 60%, transparent); }
+.uc-table .uc-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Empty state */
+.uc-empty { text-align: center; padding: 2.4rem 1rem; color: var(--uc-ink-2); border: 1px dashed var(--uc-rule); border-radius: var(--uc-radius-l); }
+.uc-empty-title { font-family: var(--uc-serif); font-size: 1.15rem; color: var(--uc-ink); margin: 0 0 .3rem; }
+.uc-empty p { margin: 0 0 1rem; }
+
+/* Stat */
+.uc-stat { display: grid; gap: .15rem; padding: 1rem 1.2rem; background: var(--uc-card); border: 1px solid var(--uc-rule); border-radius: var(--uc-radius-l); }
+.uc-stat-value { font-family: var(--uc-serif); font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; color: var(--uc-ink); }
+.uc-stat-label { font-size: .8rem; text-transform: uppercase; letter-spacing: .1em; color: var(--uc-ink-2); }
+.uc-stat-hint { font-size: .82rem; color: var(--uc-ink-2); }
+
+/* Course and student cards */
+.uc-course, .uc-student { display: flex; flex-direction: column; gap: .7rem; margin-bottom: 0; transition: transform var(--uc-dur), box-shadow var(--uc-dur); }
+.uc-course:hover, .uc-student:hover { transform: translateY(-2px); }
+.uc-course-code { font-family: var(--uc-mono); font-size: .8rem; color: var(--uc-accent); letter-spacing: .04em; }
+.uc-course-title, .uc-student-name { font-family: var(--uc-serif); font-size: 1.2rem; font-weight: 600; margin: 0; line-height: 1.2; color: var(--uc-ink); }
+.uc-course-meta, .uc-student-meta { display: flex; gap: .4rem .9rem; flex-wrap: wrap; font-size: .85rem; color: var(--uc-ink-2); margin: 0; padding: 0; list-style: none; }
+.uc-course-desc { margin: 0; color: var(--uc-ink-2); font-size: .93rem; }
+.uc-card-foot { display: flex; justify-content: space-between; align-items: center; gap: .8rem; margin-top: auto; flex-wrap: wrap; }
+.uc-avatar { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--uc-paper); border: 1px solid var(--uc-rule); font-family: var(--uc-serif); font-weight: 600; color: var(--uc-accent); flex: none; }
+
+/* Confirm button */
+.uc-confirm { display: inline-flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.uc-confirm-q { font-size: .86rem; color: var(--uc-ink-2); }
+
+/* Secret */
+.uc-secret { font-family: var(--uc-mono); background: var(--uc-paper); border: 1px solid var(--uc-rule); border-radius: var(--uc-radius-s); padding: .5rem .7rem; word-break: break-all; user-select: all; }
+
+@media (prefers-reduced-motion: reduce) {
+  .uc-root *, .uc-btn, .uc-course, .uc-student, .uc-seats-fill, .uc-nav a, .uc-input, .uc-select, .uc-textarea {
+    transition: none !important; animation: none !important;
+  }
+  .uc-course:hover, .uc-student:hover { transform: none; }
+}

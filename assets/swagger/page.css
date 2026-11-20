@@ -1,0 +1,3 @@
+/* Swagger UI 5 has only a light theme: keep the page light whatever the browser prefers */
+html { color-scheme: light; background: #fff; }
+body { margin: 0; background: #fff; }

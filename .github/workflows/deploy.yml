@@ -1,7 +1,6 @@
-# Tests every pull request against MySQL 8.4 (production's database) and PostgreSQL 17
-# (staging's). Every merge to main also builds the image, deploys staging on Render at once,
-# and deploys production on Azure Container Apps once a reviewer approves it (the "production"
-# environment). There is one branch: main.
+# Tests every pull request against PostgreSQL 17. Every merge to main also builds the image,
+# deploys staging on Render, and deploys production on Azure Container Apps once a reviewer
+# approves it (the "production" environment). There is one branch: main.
 name: build-and-deploy
 
 on:
@@ -14,6 +13,7 @@ env:
   CONTAINER_ENV: unicloud-env           # must match setup-azure.sh
   CONTAINER_APP: unicloud-portal
   GHCR_USERNAME: rata5  # the account that owns the GHCR_PAT token
+  CARGO_TERM_COLOR: always
 
 jobs:
   test:
@@ -21,44 +21,8 @@ jobs:
     permissions:
       contents: read
     services:
-      mysql:
-        image: mysql:8.4                 # the same version as on Azure
-        env:
-          MYSQL_ROOT_PASSWORD: test
-          MYSQL_DATABASE: unicloud
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -ptest"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 30
-    env:
-      DATABASE_URL: jdbc:mysql://127.0.0.1:3306/unicloud?user=root&password=test&sslMode=REQUIRED
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: maven
-
-      - name: Test (Flyway applies the migrations to MySQL first)
-        run: |
-          chmod +x mvnw
-          ./mvnw -B verify
-
-  # Staging runs on PostgreSQL with the copies in db/migration-postgresql. This runs the same
-  # tests there. Staging's deploy waits for it; production's doesn't, so a problem that only
-  # PostgreSQL has can never hold up production.
-  test-postgres:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    services:
       postgres:
-        image: postgres:17               # the same version as staging on Render
+        image: postgres:17               # the same version as staging and production
         env:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: unicloud
@@ -70,24 +34,46 @@ jobs:
           --health-timeout 5s
           --health-retries 30
     env:
-      DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/unicloud?user=postgres&password=test
-      SPRING_FLYWAY_LOCATIONS: classpath:db/migration-postgresql
+      TEST_DATABASE_URL: postgres://postgres:test@127.0.0.1:5432/unicloud
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-java@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          distribution: temurin
-          java-version: '25'
-          cache: maven
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --check
+      - name: Lint
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test (unit, SSO conformance, portal, enrollment race)
+        run: cargo test --locked
 
-      - name: Test (Flyway applies the PostgreSQL migrations first)
-        run: |
-          chmod +x mvnw
-          ./mvnw -B verify
+  web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Types match api/openapi.json
+        run: npm run gen:api && git diff --exit-code apps/portal/src/api/schema.d.ts
+      - name: Type check
+        run: npm run typecheck
+      - name: Test (components and app)
+        run: npm test
+      - name: Build (app and package)
+        run: npm run build && npm run pack:ui
 
   build:
-    needs: test
+    needs: [test, web]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -96,14 +82,11 @@ jobs:
       image: ${{ steps.tag.outputs.image }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Pick image name
         id: tag
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-
       - name: Build
         run: docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "${{ steps.tag.outputs.image }}" .
-
       - name: Push (main only)
         if: github.ref == 'refs/heads/main'
         env:
@@ -112,10 +95,10 @@ jobs:
           echo "$TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push "${{ steps.tag.outputs.image }}"
 
-  # Render builds staging itself from this commit. The deploy hook names the exact commit, so
-  # staging never runs code whose PostgreSQL tests failed. Production doesn't wait for this job.
+  # Render builds staging itself. With the Blueprint (render.yaml) it deploys every push to main on
+  # its own; the deploy hook, when set, pins the exact commit that passed the tests.
   deploy-staging:
-    needs: [test-postgres, build]
+    needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: staging
@@ -123,25 +106,21 @@ jobs:
     steps:
       - name: Ask Render to deploy this commit
         env:
-          # The service's Deploy Hook URL (Render: unicloud-portal-staging, Settings). It is a
-          # secret: anyone who has it can deploy.
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
         run: |
           if [[ -z "$RENDER_DEPLOY_HOOK" ]]; then
-            echo "::warning::RENDER_DEPLOY_HOOK is not set, so staging was not deployed (see the README's 'The pipeline')"
+            echo "::notice::RENDER_DEPLOY_HOOK is not set; the Render Blueprint deploys main by itself"
             exit 0
           fi
           curl -fsS -X POST "$RENDER_DEPLOY_HOOK&ref=$GITHUB_SHA" -o /dev/null
-          echo "Render is deploying $GITHUB_SHA to staging. It takes a few minutes." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Render is deploying $GITHUB_SHA to staging." | tee -a "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    # Production lives in the team repository, which holds the Azure secrets
+    if: github.ref == 'refs/heads/main' && github.repository == 'rata5/unicloud-portal'
     runs-on: ubuntu-latest
     # The job waits here until a reviewer of the "production" environment approves it
-    # (Settings, Environments). Approve after checking the change on staging. When a newer
-    # merge arrives, GitHub cancels the older deploy still waiting, so approving always
-    # ships the latest main.
     environment:
       name: production
       url: ${{ steps.live.outputs.url }}
@@ -162,50 +141,40 @@ jobs:
       - name: Deploy (the first run creates the app)
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          # The RSA key pair the app signs login tokens with (PEM text). Every replica must use
-          # the same pair, or a token issued by one replica is rejected by the next.
-          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
-          JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}            # postgres://... from setup-azure.sh
+          SIGNING_KEY: ${{ secrets.JWT_PRIVATE_KEY }}          # RSA private key, PKCS#8 PEM
         run: |
-          if [[ -z "$JWT_PRIVATE_KEY" || -z "$JWT_PUBLIC_KEY" ]]; then
-            echo "Add the JWT_PRIVATE_KEY and JWT_PUBLIC_KEY repository secrets (see the README's 'The pipeline')" >&2
+          if [[ -z "$SIGNING_KEY" || "$DATABASE_URL" != postgres* ]]; then
+            echo "Set JWT_PRIVATE_KEY and a postgres:// DATABASE_URL (README, 'The pipeline')" >&2
             exit 1
           fi
           az extension add --name containerapp --upgrade --only-show-errors
-          # The app reads app.jwt.private-key / app.jwt.public-key; Spring maps these variables to
-          # them and accepts the PEM text directly, so no key file is needed in the image.
-          ENV_VARS=(DATABASE_URL=secretref:db-url
-                    APP_JWT_PRIVATE_KEY=secretref:jwt-private-key
-                    APP_JWT_PUBLIC_KEY=secretref:jwt-public-key)
+          # Each replica reports its own name (CONTAINER_APP_REPLICA_NAME) in X-Served-By.
+          # 10 replicas x 10 connections stays under the B1ms server's connection limit.
+          ENV_VARS=(APP_ENV=production DATABASE_URL=secretref:db-url APP_SIGNING_KEY_PEM=secretref:signing-key
+                    APP_DB_POOL_MAX=10)
+          # The app's address is <app>.<environment's default domain>, known before the first deploy.
+          # Production refuses to start without a fixed https issuer (docs/sso.md, "How the portal does it").
+          DOMAIN=$(az containerapp env show -n "$CONTAINER_ENV" -g "$RESOURCE_GROUP" --query properties.defaultDomain -o tsv)
+          ENV_VARS+=(APP_SSO_ISSUER="https://$CONTAINER_APP.$DOMAIN")
           if az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" > /dev/null 2>&1; then
-            # Single sign-on tokens name the portal's public address as their issuer
-            # (docs/sso.md). A brand-new app has no address yet; until the next deploy the app
-            # works it out from each request.
-            FQDN=$(az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
-              --query properties.configuration.ingress.fqdn -o tsv)
-            ENV_VARS+=(APP_SSO_ISSUER="https://$FQDN")
             az containerapp secret set -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
-              --secrets db-url="$DATABASE_URL" jwt-private-key="$JWT_PRIVATE_KEY" jwt-public-key="$JWT_PUBLIC_KEY" \
-              --output none
-            # Java needs 0.5 vCPU and 1 GiB per replica; setting it on every deploy keeps it that way
+              --secrets db-url="$DATABASE_URL" signing-key="$SIGNING_KEY" --output none
+            # Rust needs far less than Java: 0.25 vCPU and 0.5 GiB per replica
             az containerapp update -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
-              --image "$IMAGE" --cpu 0.5 --memory 1.0Gi \
-              --set-env-vars "${ENV_VARS[@]}" \
-              --output none
+              --image "$IMAGE" --cpu 0.25 --memory 0.5Gi \
+              --set-env-vars "${ENV_VARS[@]}" --output none
           else
-            # At least 2 replicas (no single point of failure), up to 10 when a replica
-            # has more than 20 requests in flight
+            # At least 2 replicas (no single point of failure), up to 10 under the 08:00 rush
             az containerapp create -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
               --environment "$CONTAINER_ENV" \
               --image "$IMAGE" --target-port 8080 --ingress external \
               --registry-server ghcr.io --registry-username "$GHCR_USERNAME" --registry-password "$GHCR_PAT" \
-              --cpu 0.5 --memory 1.0Gi \
+              --cpu 0.25 --memory 0.5Gi \
               --min-replicas 2 --max-replicas 10 \
-              --scale-rule-name http-rush --scale-rule-type http --scale-rule-http-concurrency 20 \
-              --secrets db-url="$DATABASE_URL" jwt-private-key="$JWT_PRIVATE_KEY" jwt-public-key="$JWT_PUBLIC_KEY" \
-              --env-vars "${ENV_VARS[@]}" \
-              --output none
+              --scale-rule-name http-rush --scale-rule-type http --scale-rule-http-concurrency 50 \
+              --secrets db-url="$DATABASE_URL" signing-key="$SIGNING_KEY" \
+              --env-vars "${ENV_VARS[@]}" --output none
           fi
 
       - name: Check the new version is live

@@ -1,6 +1,5 @@
 // Simulates the 08:00 enrollment rush against your deployed portal.
 // Run: k6 run -e BASE_URL=https://<your-app-url> spike.js
-// Java speeds up after its first minute of traffic, so do a short warm-up run first.
 import http from "k6/http";
 import { check, sleep } from "k6";
 
@@ -30,8 +29,11 @@ export const options = {
 };
 
 export default function () {
-  // Swap in the real flow once the API exists: log in -> profile -> catalog -> enroll
-  const res = http.get(`${BASE_URL}/`);
-  check(res, { "status is 200": (r) => r.status === 200 });
+  // The pages every student opens at 08:00 before enrolling: the sign-in page (server-rendered,
+  // with a session row for its CSRF token) and the SSO discovery that every module reads.
+  const login = http.get(`${BASE_URL}/login`);
+  check(login, { "sign-in page 200": (r) => r.status === 200 });
+  const disco = http.get(`${BASE_URL}/.well-known/openid-configuration`);
+  check(disco, { "discovery 200": (r) => r.status === 200 });
   sleep(1);
 }

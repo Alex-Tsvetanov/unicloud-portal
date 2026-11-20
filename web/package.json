@@ -1,0 +1,17 @@
+{
+  "name": "unicloud-web",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "gen:api": "npm run gen:api -w @unicloud/portal-app",
+    "build:ui": "npm run build -w @unicloud/ui",
+    "typecheck": "npm run typecheck -w @unicloud/ui && npm run build:ui && npm run typecheck -w @unicloud/portal-app",
+    "test": "npm run test -w @unicloud/ui && npm run build:ui && npm run test -w @unicloud/portal-app",
+    "build": "npm run build:ui && npm run build -w @unicloud/portal-app",
+    "pack:ui": "npm run pack -w @unicloud/ui",
+    "dev": "npm run build:ui && npm run dev -w @unicloud/portal-app"
+  }
+}

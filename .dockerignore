@@ -1,5 +1,13 @@
 target/
 .git/
 .github/
+.claude/
 infra/
 loadtest/
+docs/
+openspec/
+tests/
+scripts/
+web/**/node_modules/
+web/**/dist/
+web/dist-ui/
