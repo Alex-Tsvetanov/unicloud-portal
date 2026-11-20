@@ -19,7 +19,8 @@ services:
     runtime: docker
     plan: free
     region: frankfurt
-    branch: main
+    # Temporary: staging runs the Rust rewrite before it is merged. Set back to main when PR #2 merges.
+    branch: rust-rewrite
     healthCheckPath: /health
     envVars:
       # Staging: any SSO callback URL, and the staging tools at /staging (docs/sso.md)
