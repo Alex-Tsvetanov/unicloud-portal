@@ -58,7 +58,9 @@ impl Config {
             .replace("\\n", "\n");
         let hosts_raw = var("APP_SSO_ALLOWED_CALLBACK_HOSTS").unwrap_or_else(|| parse_hosts_file(DEFAULT_CALLBACK_HOSTS));
         // Render sets RENDER_EXTERNAL_URL to the service's own https address
+        // An unresolved placeholder (the Java portal's "${RENDER_EXTERNAL_URL}") counts as unset
         let issuer = var("APP_SSO_ISSUER")
+            .filter(|s| !s.contains("${"))
             .or_else(|| var("RENDER_EXTERNAL_URL"))
             .map(|s| s.trim().trim_end_matches('/').to_string());
         if env == Environment::Production && !issuer.as_deref().is_some_and(|i| i.starts_with("https://")) {

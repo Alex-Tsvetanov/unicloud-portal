@@ -40,7 +40,10 @@ pub async fn security_headers(req: Request, next: Next) -> Response {
     set(
         h,
         "content-security-policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';          frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+        concat!(
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; ",
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+        ),
     );
     set(h, "x-content-type-options", "nosniff");
     set(h, "x-frame-options", "DENY");
