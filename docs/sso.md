@@ -182,6 +182,7 @@ Check all of these. Most OIDC libraries do it for you:
 - The RS256 signature checks out against the keys at `/oauth2/jwks`. Cache the keys. Fetch them again when a token has a `kid` you do not know.
 - `iss` is the portal's address, exactly as in the discovery document.
 - `aud` contains the module's own `client_id`.
+- It is an ID token, not an access token: access tokens carry the header `typ: at+jwt`, ID tokens have no `typ`. Never accept one in place of the other.
 - `exp` has not passed. Allow a small clock skew, for example 60 seconds.
 - `nonce` matches the value stored in the session.
 
@@ -403,6 +404,6 @@ For the portal team. The design is in [openspec/changes/rust-rewrite/design.md](
 
 - **Changing and deleting modules, and rotating a secret.** Today an admin can only register. Until there is a page for it, a secret is replaced by deleting the row in `oauth_clients` and registering again.
 - **Signed client authentication (`private_key_jwt`).** Stronger than a shared secret, but more work for the module teams.
-- **Rate limiting.** Secrets are 256 random bits, so guessing one is not practical, but there is no limit on attempts at `/oauth2/token`, and every `GET /oauth2/authorize` without a session writes a session row. Best done at the ingress.
+- **Rate limiting per IP.** Sign-in locks an email after 10 failures for 15 minutes, and expired sessions are deleted hourly. There is no limit per IP, and none on attempts at `/oauth2/token` (secrets are 256 random bits, so guessing one is not practical). Best done at the ingress.
 - **Single logout** across modules (see [Logout](#logout)).
 - **Key rotation.** Tokens already carry a `kid`, so a second key can be published next to the first when the time comes.

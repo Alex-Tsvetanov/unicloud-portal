@@ -43,5 +43,5 @@
 - [x] 6.1 `docs/sso.md`: `DEAN`, `faculty`, unknown-role rule, directory section, section 11 rewrite, corrections
 - [x] 6.2 README, `render.yaml`, `infra/setup-azure.sh`, deploy job
 - [x] 6.3 Remove the Java code and MySQL migrations
-- [ ] 6.4 Focused security review of `oidc/` and `accounts/`
+- [x] 6.4 Focused security review of `oidc/` and `accounts/` (no critical or high findings; the medium and most low findings are fixed, see design.md "Security review")
 - [ ] 6.5 Spike test against production, results in `docs/slo.md`

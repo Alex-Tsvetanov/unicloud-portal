@@ -28,7 +28,9 @@ impl EnrollOutcome {
     }
 }
 
-pub async fn enroll(db: &PgPool, student_id: i64, offering_id: i64) -> sqlx::Result<EnrollOutcome> {
+/// Enrolls in an offering of `semester` (the current one): the catalogue hides other semesters,
+/// and a request for a hidden offering is refused as closed
+pub async fn enroll(db: &PgPool, student_id: i64, offering_id: i64, semester: &str) -> sqlx::Result<EnrollOutcome> {
     let mut tx = db.begin().await?;
     let status: Option<(String,)> = sqlx::query_as("SELECT status FROM academic_records WHERE user_id = $1")
         .bind(student_id)
@@ -51,17 +53,20 @@ pub async fn enroll(db: &PgPool, student_id: i64, offering_id: i64) -> sqlx::Res
     }
     // Take a place: one conditional UPDATE, safe across replicas
     let took = sqlx::query(
-        "UPDATE course_offerings SET enrolled_count = enrolled_count + 1 WHERE id = $1 AND is_open AND enrolled_count < capacity",
+        "UPDATE course_offerings SET enrolled_count = enrolled_count + 1 WHERE id = $1 AND is_open AND semester = $2 AND enrolled_count < capacity",
     )
     .bind(offering_id)
+    .bind(semester)
     .execute(&mut *tx)
     .await?
     .rows_affected();
     if took == 0 {
-        let o: Option<(bool, i32, i32)> = sqlx::query_as("SELECT is_open, enrolled_count, capacity FROM course_offerings WHERE id = $1")
-            .bind(offering_id)
-            .fetch_optional(&mut *tx)
-            .await?;
+        let o: Option<(bool, i32, i32)> =
+            sqlx::query_as("SELECT is_open AND semester = $2, enrolled_count, capacity FROM course_offerings WHERE id = $1")
+                .bind(offering_id)
+                .bind(semester)
+                .fetch_optional(&mut *tx)
+                .await?;
         return Ok(match o {
             None => EnrollOutcome::NoSuchOffering,
             Some((false, _, _)) => EnrollOutcome::Closed,

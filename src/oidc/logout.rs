@@ -35,6 +35,7 @@ fn bad(msg: &str) -> Response {
 pub async fn logout(State(st): State<AppState>, headers: HeaderMap, session: Session, Query(q): Query<LogoutQuery>) -> AppResult<Response> {
     // Which module asks? From the ID token hint (kept resolvable for 24 hours), or from client_id.
     let mut client_id = q.client_id.clone();
+    let mut verified_hint = false;
     if let Some(hint) = q.id_token_hint.as_deref().filter(|h| !h.is_empty()) {
         let mut v = Validation::new(Algorithm::RS256);
         v.set_issuer(&[issuer(&st, &headers)]);
@@ -61,6 +62,7 @@ pub async fn logout(State(st): State<AppState>, headers: HeaderMap, session: Ses
             return Ok(bad("client_id не съвпада с id_token_hint."));
         }
         client_id = Some(grant_client);
+        verified_hint = true;
     }
 
     let target = match q.post_logout_redirect_uri.as_deref() {
@@ -84,6 +86,11 @@ pub async fn logout(State(st): State<AppState>, headers: HeaderMap, session: Ses
         }
         None => "/login".to_string(),
     };
-    session.flush().await.map_err(anyhow::Error::from)?;
+    // Without a valid ID token hint any website could log the user out with a link: ask first
+    if !verified_hint {
+        let csrf = crate::web::session::csrf_token(&session).await?;
+        return Ok(crate::ui::components::confirm_logout(&csrf).into_response());
+    }
+    crate::web::session::end_session(&st, &session).await?;
     Ok(found(&target))
 }

@@ -73,6 +73,8 @@ async fn full_login_flow_tokens_userinfo_and_replay() {
 
     let access = t["access_token"].as_str().unwrap();
     assert_eq!(jwt_payload(access)["client_id"], client);
+    assert_eq!(jwt_header(access)["typ"], "at+jwt", "access tokens say what they are (RFC 9068)");
+    assert!(jwt_header(t["id_token"].as_str().unwrap()).get("typ").is_none());
     let ui = b.bearer_get("/userinfo", access).await;
     assert_eq!(ui.status, 200, "{}", ui.text);
     assert_eq!(ui.json()["sub"], uid.to_string());
@@ -301,6 +303,18 @@ async fn logout_everywhere_ends_the_session() {
     let (client, secret) = staging_client(&b, false).await;
     let (_, email, pw) = staging_student(&b).await;
     let t = login_and_exchange(&b, &client, &secret, &email, &pw, "openid").await;
+    // Without an ID token hint, a link from any website must not log the user out: the portal asks
+    let ask = b.get("/connect/logout").await;
+    assert_eq!(ask.status, 200);
+    assert!(ask.text.contains("action=\"/logout\""));
+    assert_eq!(b.get(&authorize_url(&client, "openid", &pkce(), &[])).await.status, 302);
+    assert!(
+        b.get(&authorize_url(&client, "openid", &pkce(), &[]))
+            .await
+            .location()
+            .starts_with(CB),
+        "still signed in"
+    );
     let q = serde_urlencoded::to_string([
         ("id_token_hint", t["id_token"].as_str().unwrap()),
         ("client_id", &client),
@@ -360,16 +374,75 @@ async fn directory_api_with_client_credentials() {
         "not a teacher"
     );
     assert_eq!(b.bearer_get("/api/v1/directory/users/999999999", &token).await.status, 404);
-    let fac = b.bearer_get("/api/v1/directory/faculties/FCST/students", &token).await;
-    assert!(
-        fac.json()
+    // Walk the pages (the shared test database may hold more than 200 students)
+    let mut url = "/api/v1/directory/faculties/FCST/students".to_string();
+    let mut found = false;
+    for _ in 0..100 {
+        let page = b.bearer_get(&url, &token).await;
+        assert_eq!(page.status, 200);
+        found |= page
+            .json()
             .as_array()
             .unwrap()
             .iter()
-            .any(|s| s["sub"].as_str() == Some(uid.to_string().as_str()))
-    );
+            .any(|s| s["sub"].as_str() == Some(uid.to_string().as_str()));
+        match page
+            .headers
+            .get("link")
+            .and_then(|l| l.to_str().ok())
+            .and_then(|l| l.split('>').next())
+            .map(|l| l.trim_start_matches('<').to_string())
+        {
+            Some(next) if !found => url = next,
+            _ => break,
+        }
+    }
+    assert!(found, "the new student is in the faculty list");
     assert_eq!(b.bearer_get("/api/v1/directory/faculties/NOPE/students", &token).await.status, 404);
 
     // A client-credentials token is not a user login
     assert_eq!(b.bearer_get("/userinfo", &token).await.status, 401);
+}
+
+#[tokio::test]
+async fn concurrent_exchanges_of_one_code_let_at_most_one_win() {
+    let p = start(Environment::Staging, &[]).await;
+    let b = Browser::new(&p.base);
+    let (client, secret) = staging_client(&b, false).await;
+    let (_, email, pw) = staging_student(&b).await;
+    b.sign_in(&email, &pw).await;
+    let pk = pkce();
+    let code = b.get(&authorize_url(&client, "openid", &pk, &[])).await.query("code").unwrap();
+    let form = vec![
+        ("grant_type".to_string(), "authorization_code".to_string()),
+        ("code".to_string(), code),
+        ("redirect_uri".to_string(), CB.to_string()),
+        ("code_verifier".to_string(), pk.verifier.clone()),
+    ];
+    let calls: Vec<_> = (0..8)
+        .map(|_| {
+            let (b, c, s, f) = (b.clone(), client.clone(), secret.clone(), form.clone());
+            tokio::spawn(async move {
+                let f: Vec<(&str, &str)> = f.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                b.token(&c, &s, &f).await
+            })
+        })
+        .collect();
+    let mut winners = Vec::new();
+    for c in calls {
+        let r = c.await.unwrap();
+        match r.status {
+            200 => winners.push(r.json()["access_token"].as_str().unwrap().to_string()),
+            400 => assert_eq!(r.json()["error"], "invalid_grant"),
+            other => panic!("unexpected {other}: {}", r.text),
+        }
+    }
+    assert!(winners.len() <= 1, "at most one exchange wins");
+    for t in winners {
+        assert_eq!(
+            b.bearer_get("/userinfo", &t).await.status,
+            401,
+            "the winner's token is revoked by the replay"
+        );
+    }
 }

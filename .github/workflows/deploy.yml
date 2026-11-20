@@ -129,10 +129,11 @@ jobs:
           # 10 replicas x 10 connections stays under the B1ms server's connection limit.
           ENV_VARS=(APP_ENV=production DATABASE_URL=secretref:db-url APP_SIGNING_KEY_PEM=secretref:signing-key
                     APP_DB_POOL_MAX=10)
+          # The app's address is <app>.<environment's default domain>, known before the first deploy.
+          # Production refuses to start without a fixed https issuer (docs/sso.md, "How the portal does it").
+          DOMAIN=$(az containerapp env show -n "$CONTAINER_ENV" -g "$RESOURCE_GROUP" --query properties.defaultDomain -o tsv)
+          ENV_VARS+=(APP_SSO_ISSUER="https://$CONTAINER_APP.$DOMAIN")
           if az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" > /dev/null 2>&1; then
-            FQDN=$(az containerapp show -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
-              --query properties.configuration.ingress.fqdn -o tsv)
-            ENV_VARS+=(APP_SSO_ISSUER="https://$FQDN")
             az containerapp secret set -n "$CONTAINER_APP" -g "$RESOURCE_GROUP" \
               --secrets db-url="$DATABASE_URL" signing-key="$SIGNING_KEY" --output none
             # Rust needs far less than Java: 0.25 vCPU and 0.5 GiB per replica
@@ -150,7 +151,6 @@ jobs:
               --scale-rule-name http-rush --scale-rule-type http --scale-rule-http-concurrency 50 \
               --secrets db-url="$DATABASE_URL" signing-key="$SIGNING_KEY" \
               --env-vars "${ENV_VARS[@]}" --output none
-            echo "::warning::First deploy: APP_SSO_ISSUER is set on the next deploy, when the address is known"
           fi
 
       - name: Check the new version is live

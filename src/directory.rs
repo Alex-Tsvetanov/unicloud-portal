@@ -16,6 +16,8 @@ use crate::oidc::{DIRECTORY_AUDIENCE, DIRECTORY_SCOPE, claims};
 use crate::state::AppState;
 
 const PAGE: i64 = 200;
+/// 200 x 10,000 rows is far beyond any faculty; it also keeps OFFSET arithmetic small
+const MAX_PAGE: i64 = 10_000;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -226,7 +228,7 @@ async fn faculty_offerings(
         Ok(false) => return not_found(),
         Err(e) => return db_err(e),
     }
-    let page = q.page.unwrap_or(1).max(1);
+    let page = q.page.unwrap_or(1).clamp(1, MAX_PAGE);
     let sql = format!(
         "SELECT {OFFERING_COLS} WHERE c.faculty_code = $1 AND ($2::text IS NULL OR o.semester = $2) ORDER BY o.id LIMIT $3 OFFSET $4"
     );
@@ -243,7 +245,10 @@ async fn faculty_offerings(
                 return not_found();
             };
             let base = match &q.semester {
-                Some(s) => format!("/api/v1/directory/faculties/{code}/offerings?semester={s}"),
+                Some(s) => format!(
+                    "/api/v1/directory/faculties/{code}/offerings?semester={}",
+                    url::form_urlencoded::byte_serialize(s.as_bytes()).collect::<String>()
+                ),
                 None => format!("/api/v1/directory/faculties/{code}/offerings"),
             };
             paged(items, page, &base)
@@ -264,7 +269,7 @@ async fn faculty_students(
         Ok(false) => return not_found(),
         Err(e) => return db_err(e),
     }
-    let page = q.page.unwrap_or(1).max(1);
+    let page = q.page.unwrap_or(1).clamp(1, MAX_PAGE);
     let rows: Result<Vec<(i64, String, String, String, i16, String)>, _> = sqlx::query_as(
         "SELECT u.id, u.first_name || ' ' || u.last_name, r.faculty_number, s.name, r.study_year, r.status
          FROM academic_records r JOIN users u ON u.id = r.user_id JOIN specialties s ON s.id = r.specialty_id

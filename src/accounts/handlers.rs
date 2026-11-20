@@ -8,7 +8,7 @@ use maud::{Markup, html};
 use serde::Deserialize;
 use tower_sessions::Session;
 
-use super::password;
+use super::{password, throttle};
 use crate::error::{AppError, AppResult};
 use crate::state::AppState;
 use crate::ui::components::{csrf_field, field, flash, layout};
@@ -59,15 +59,29 @@ fn login_view(csrf: &str, error: Option<&str>, email: &str, sso: bool) -> Markup
 
 pub async fn login_submit(State(st): State<AppState>, session: Session, Form(f): Form<LoginForm>) -> AppResult<Response> {
     let email = f.email.trim().to_lowercase();
+    if throttle::is_locked(&email) {
+        let csrf = csrf_token(&session).await?;
+        let msg = "Твърде много неуспешни опити. Опитайте отново след 15 минути.";
+        return Ok((
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            login_view(&csrf, Some(msg), &email, false),
+        )
+            .into_response());
+    }
     let row: Option<(i64, String, bool)> = sqlx::query_as("SELECT id, password_hash, enabled FROM users WHERE email = $1")
         .bind(&email)
         .fetch_optional(&st.db)
         .await?;
     let ok = match row {
         Some((id, hash, enabled)) => (password::verify(f.password, hash).await && enabled).then_some(id),
-        None => None,
+        None => {
+            // Same work as a real check, so the answer time does not reveal which emails exist
+            password::verify_dummy(f.password).await;
+            None
+        }
     };
     let Some(user_id) = ok else {
+        throttle::record_failure(&email);
         let csrf = csrf_token(&session).await?;
         return Ok((
             axum::http::StatusCode::UNAUTHORIZED,
@@ -75,6 +89,7 @@ pub async fn login_submit(State(st): State<AppState>, session: Session, Form(f):
         )
             .into_response());
     };
+    throttle::clear(&email);
     sign_in(&session, user_id).await?;
     tracing::info!(user_id, "signed in");
     Ok(Redirect::to(&after_login_target(&session).await?).into_response())
@@ -88,8 +103,8 @@ async fn after_login_target(session: &Session) -> AppResult<String> {
         .unwrap_or_else(|| "/".into()))
 }
 
-pub async fn logout(session: Session) -> AppResult<Response> {
-    session.flush().await.map_err(anyhow::Error::from)?;
+pub async fn logout(State(st): State<AppState>, session: Session) -> AppResult<Response> {
+    crate::web::session::end_session(&st, &session).await?;
     Ok(Redirect::to("/login").into_response())
 }
 
@@ -136,11 +151,14 @@ pub async fn password_submit(
         .bind(cu.user.id)
         .fetch_one(&st.db)
         .await?;
-    if !password::verify(f.password, hash).await {
+    if !password::verify(f.password.clone(), hash).await {
         return Ok(password_view(&cu, Some("Текущата парола е грешна.")).into_response());
     }
     if f.new_password != f.new_password2 {
         return Ok(password_view(&cu, Some("Новите пароли не съвпадат.")).into_response());
+    }
+    if f.new_password == f.password {
+        return Ok(password_view(&cu, Some("Новата парола трябва да е различна от текущата.")).into_response());
     }
     if let Err(msg) = password::check_strength(&f.new_password) {
         return Ok(password_view(&cu, Some(msg)).into_response());
@@ -148,6 +166,11 @@ pub async fn password_submit(
     let new_hash = password::hash(f.new_password).await?;
     sqlx::query("UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2")
         .bind(new_hash)
+        .bind(cu.user.id)
+        .execute(&st.db)
+        .await?;
+    // Tokens issued before the change stop working at /userinfo
+    sqlx::query("UPDATE oauth_grants SET revoked = TRUE WHERE user_id = $1")
         .bind(cu.user.id)
         .execute(&st.db)
         .await?;

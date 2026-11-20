@@ -183,7 +183,7 @@ async fn authorization_code(st: &AppState, client: &Client, iss: &str, f: &Token
     if let Some(n) = &row.nonce {
         id.insert("nonce".into(), json!(n));
     }
-    let access_token = st.keys.sign(&access)?;
+    let access_token = st.keys.sign_typed(&access, Some("at+jwt"))?;
     let id_token = st.keys.sign(&Value::Object(id))?;
     sqlx::query("UPDATE oauth_grants SET access_jti = $1, id_token_jti = $2 WHERE id = $3")
         .bind(access_jti)
@@ -213,7 +213,7 @@ async fn client_credentials(st: &AppState, client: &Client, iss: &str, f: &Token
         "iss": iss, "sub": client.client_id, "aud": [DIRECTORY_AUDIENCE], "client_id": client.client_id,
         "scope": [DIRECTORY_SCOPE], "iat": iat, "nbf": iat, "exp": exp, "jti": jti.to_string(),
     });
-    let token = st.keys.sign(&claims)?;
+    let token = st.keys.sign_typed(&claims, Some("at+jwt"))?;
     sqlx::query("INSERT INTO oauth_client_tokens (jti, client_id, expires_at) VALUES ($1, $2, to_timestamp($3))")
         .bind(jti)
         .bind(&client.client_id)

@@ -8,6 +8,12 @@
     if (meta) e.detail.headers["X-CSRF-Token"] = meta.content;
   });
 
+  // Selects that save on change (no inline handlers, so the CSP can forbid inline script)
+  document.addEventListener("change", function (e) {
+    var el = e.target;
+    if (el.matches && el.matches("select[data-autosubmit]") && el.form) el.form.requestSubmit();
+  });
+
   // Staging page: forms post JSON to the staging API, then the users table reloads (htmx fragment)
   function reloadUsers() {
     if (window.htmx && document.getElementById("users-table")) {

@@ -1,2 +1,4 @@
-/mvnw text eol=lf
-*.cmd text eol=crlf
+# Every text file is stored and checked out with LF line endings
+* text=auto eol=lf
+*.pem text eol=lf
+*.png binary

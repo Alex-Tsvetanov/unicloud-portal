@@ -129,7 +129,7 @@ pub async fn courses(
 
 pub async fn enroll(State(st): State<AppState>, cu: CurrentUser, Path(id): Path<i64>, Form(q): Form<CatalogQuery>) -> AppResult<Markup> {
     require(&cu, Permission::EnrollmentRequestCreate)?;
-    let outcome = enrollment::enroll(&st.db, cu.user.id, id).await?;
+    let outcome = enrollment::enroll(&st.db, cu.user.id, id, &st.cfg.current_semester).await?;
     if outcome == EnrollOutcome::Enrolled {
         tracing::info!(student = cu.user.id, offering = id, "enrolled");
     }

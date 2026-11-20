@@ -36,8 +36,13 @@ impl SigningKeys {
     }
 
     pub fn sign(&self, claims: &Value) -> anyhow::Result<String> {
+        self.sign_typed(claims, None)
+    }
+
+    /// `typ: "at+jwt"` for access tokens (RFC 9068); no `typ` for ID tokens, as the Java portal
+    pub fn sign_typed(&self, claims: &Value, typ: Option<&str>) -> anyhow::Result<String> {
         let mut header = Header::new(Algorithm::RS256);
-        header.typ = None;
+        header.typ = typ.map(String::from);
         header.kid = Some(self.kid.clone());
         Ok(jsonwebtoken::encode(&header, claims, &self.encoding)?)
     }

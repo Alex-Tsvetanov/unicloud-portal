@@ -59,6 +59,9 @@ impl Config {
         let issuer = var("APP_SSO_ISSUER")
             .or_else(|| var("RENDER_EXTERNAL_URL"))
             .map(|s| s.trim().trim_end_matches('/').to_string());
+        if env == Environment::Production && !issuer.as_deref().is_some_and(|i| i.starts_with("https://")) {
+            bail!("APP_SSO_ISSUER must be the portal's public https address in production");
+        }
         let bootstrap_admin = match (var("APP_BOOTSTRAP_ADMIN_EMAIL"), var("APP_BOOTSTRAP_ADMIN_PASSWORD")) {
             (Some(e), Some(p)) => Some((e, p)),
             _ => None,
@@ -83,7 +86,7 @@ impl Config {
             } else {
                 CallbackPolicyMode::Any
             },
-            secure_cookie: var("APP_INSECURE_COOKIE").is_none(),
+            secure_cookie: env == Environment::Production || var("APP_INSECURE_COOKIE").is_none(),
             git_sha: var("GIT_SHA")
                 .filter(|s| s != "dev")
                 .or_else(|| var("RENDER_GIT_COMMIT"))

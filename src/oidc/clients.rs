@@ -126,7 +126,11 @@ pub async fn register(db: &PgPool, cfg: &Config, r: Registration, registered_by:
     if !fields.is_empty() {
         return Err(RegisterError::Fields(fields));
     }
-    if client_id.eq_ignore_ascii_case(RESERVED_CLIENT_ID) {
+    // `unicloud-*` names the portal's own audiences; an all-digit id could be mistaken for a user `sub`
+    if client_id.eq_ignore_ascii_case(RESERVED_CLIENT_ID)
+        || client_id.starts_with("unicloud-")
+        || client_id.bytes().all(|b| b.is_ascii_digit())
+    {
         return Err(RegisterError::Invalid(format!("clientId: '{client_id}' is reserved")));
     }
     let redirect_uris = clean_uris("redirectUris", redirect, cfg)?;
@@ -191,8 +195,15 @@ pub async fn modules_page(State(st): State<AppState>, cu: CurrentUser) -> AppRes
     modules_view(&st, &cu, None, None).await
 }
 
-pub async fn modules_create(State(st): State<AppState>, cu: CurrentUser, Form(f): Form<ModuleForm>) -> AppResult<Markup> {
-    require_admin(&cu)?;
+/// The answer shows a secret once: never cache it
+pub async fn modules_create(State(st): State<AppState>, cu: CurrentUser, Form(f): Form<ModuleForm>) -> AppResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let page = modules_create_page(&st, &cu, f).await?;
+    Ok(([(axum::http::header::CACHE_CONTROL, "no-store")], page).into_response())
+}
+
+async fn modules_create_page(st: &AppState, cu: &CurrentUser, f: ModuleForm) -> AppResult<Markup> {
+    require_admin(cu)?;
     let reg = Registration {
         client_id: Some(f.client_id),
         name: Some(f.name),
@@ -201,12 +212,12 @@ pub async fn modules_create(State(st): State<AppState>, cu: CurrentUser, Form(f)
         directory: f.directory.is_some(),
     };
     match register(&st.db, &st.cfg, reg, &format!("user:{}", cu.user.id)).await {
-        Ok(r) => modules_view(&st, &cu, None, Some(&r)).await,
+        Ok(r) => modules_view(st, cu, None, Some(&r)).await,
         Err(RegisterError::Fields(f)) => {
             let msg: Vec<String> = f.into_iter().map(|(k, m)| format!("{k}: {m}")).collect();
-            modules_view(&st, &cu, Some(&msg.join("; ")), None).await
+            modules_view(st, cu, Some(&msg.join("; ")), None).await
         }
-        Err(RegisterError::Invalid(m) | RegisterError::Duplicate(m)) => modules_view(&st, &cu, Some(&m), None).await,
+        Err(RegisterError::Invalid(m) | RegisterError::Duplicate(m)) => modules_view(st, cu, Some(&m), None).await,
         Err(RegisterError::Db(e)) => Err(e.into()),
     }
 }

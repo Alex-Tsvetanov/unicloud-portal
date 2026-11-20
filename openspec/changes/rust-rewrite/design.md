@@ -168,6 +168,24 @@ The CHECK constraint is the last line of defence. The `enrollment_race` test fir
 3. Tell module teams to register again and to treat unknown roles as no access.
 4. Propose the change to the team repo (`rata5/unicloud-portal`) as a pull request. Production moves to a fresh PostgreSQL, with no data copied from MySQL, only with the team's agreement and a reviewer's approval.
 
+## Security review (2026-11-20)
+
+An independent review of `src/oidc/`, `src/web/`, `src/accounts/`, the directory and the staging tools found no critical or high issues. Fixed:
+- Production refuses to start without a fixed `https` issuer; the deploy derives it from the Container Apps domain.
+- Sign-in: an unknown email costs the same Argon2 work as a real one; 10 failures lock an email for 15 minutes (per replica); Argon2 runs at most 4 at a time.
+- Expired sessions are deleted hourly.
+- `/connect/logout` without a valid `id_token_hint` asks the user to confirm with a CSRF-protected form.
+- Logout revokes the module logins of that session; a password change revokes all of the user's logins and must use a new password.
+- Directory paging is bounded; the `semester` in `Link` is encoded.
+- `APP_INSECURE_COOKIE` is ignored in production.
+- Security headers on every response (CSP without inline script, `frame-ancestors 'none'`, `nosniff`, `Referrer-Policy`); the module-secret page is `no-store`.
+- Access tokens carry `typ: at+jwt` (RFC 9068).
+- Client ids `unicloud-*` and all-digit ids are reserved.
+- Only an admin can create an admin.
+- Enrollment accepts only offerings of the current semester.
+
+Open: whether inspectors are limited to their own faculty (the specs do not say), a per-IP rate limit at the ingress, and `cargo audit` in CI.
+
 ## Risks and trade-offs
 - A hand-built provider means we own its security. The conformance suite and a short focused review of `oidc/` before release offset that.
 - The 30-day staging database means repeated re-registration. Seed data keeps faculties, specialties and sample courses.

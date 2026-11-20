@@ -234,6 +234,9 @@ pub async fn staff_create(State(st): State<AppState>, cu: CurrentUser, Form(f): 
     let role = Role::parse(&f.role)
         .filter(|r| *r != Role::Student)
         .ok_or_else(|| AppError::BadRequest("Невалидна роля.".into()))?;
+    if role == Role::Admin && cu.user.role != Role::Admin {
+        return Err(AppError::Forbidden);
+    }
     let res = create_user(
         &st.db,
         NewUser {

@@ -142,3 +142,23 @@ pub fn empty(msg: &str) -> Markup {
 pub fn raw(s: &str) -> PreEscaped<&str> {
     PreEscaped(s)
 }
+
+/// Logout asked for without a valid ID token hint: the user confirms with a CSRF-protected form
+pub fn confirm_logout(csrf: &str) -> Markup {
+    layout(
+        "Изход",
+        None,
+        html! {
+            section.card.narrow {
+                h1 { "Изход от UniCloud?" }
+                p { "Ще излезете от портала и от всички модули в този браузър." }
+                form method="post" action="/logout" hx-boost="false" {
+                    (csrf_field(csrf))
+                    button.primary type="submit" { "Изход" }
+                    " "
+                    a href="/" { "Отказ" }
+                }
+            }
+        },
+    )
+}

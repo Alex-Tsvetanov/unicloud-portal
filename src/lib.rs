@@ -116,6 +116,7 @@ pub async fn build_app(st: AppState) -> anyhow::Result<Router> {
         .nest_service("/assets", ServeDir::new(assets_dir()))
         .layer(sessions)
         .layer(middleware::from_fn_with_state(st.clone(), ops::served_by))
+        .layer(middleware::from_fn(ops::security_headers))
         .layer(TraceLayer::new_for_http())
         .with_state(st))
 }

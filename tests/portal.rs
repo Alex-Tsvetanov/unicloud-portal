@@ -63,13 +63,15 @@ async fn staging_api_keeps_the_java_shapes() {
         .await;
     assert_eq!(bad_id.status, 400);
     assert_eq!(bad_id.json()["fieldErrors"][0]["field"], "clientId");
-    let reserved = b
-        .post_json(
-            "/api/v1/staging/sso-clients",
-            &json!({ "clientId": "unicloud-api", "name": "x", "redirectUris": [CB] }),
-        )
-        .await;
-    assert_eq!(reserved.status, 400);
+    for id in ["unicloud-api", "unicloud-directory", "12345"] {
+        let reserved = b
+            .post_json(
+                "/api/v1/staging/sso-clients",
+                &json!({ "clientId": id, "name": "x", "redirectUris": [CB] }),
+            )
+            .await;
+        assert_eq!(reserved.status, 400, "{id} is reserved");
+    }
 
     // Staging users sign in without a forced password change
     let (_, email, pw) = staging_student(&b).await;
@@ -219,7 +221,7 @@ async fn enrollment_never_oversells_under_a_rush() {
         .map(|s| {
             let db = db.clone();
             let s = *s;
-            tokio::spawn(async move { enrollment::enroll(&db, s, offering).await.unwrap() })
+            tokio::spawn(async move { enrollment::enroll(&db, s, offering, "2026-27-W").await.unwrap() })
         })
         .collect();
     let mut enrolled = 0;
@@ -246,9 +248,12 @@ async fn enrollment_never_oversells_under_a_rush() {
             .await
             .unwrap();
     assert!(enrollment::reject(db, teacher, eid).await.unwrap());
-    assert_eq!(enrollment::enroll(db, sid, offering).await.unwrap(), EnrollOutcome::Rejected);
+    assert_eq!(
+        enrollment::enroll(db, sid, offering, "2026-27-W").await.unwrap(),
+        EnrollOutcome::Rejected
+    );
     let late = students.iter().find(|s| **s != sid).copied().unwrap();
-    let again = enrollment::enroll(db, late, offering).await.unwrap();
+    let again = enrollment::enroll(db, late, offering, "2026-27-W").await.unwrap();
     assert!(matches!(again, EnrollOutcome::Enrolled | EnrollOutcome::AlreadyEnrolled));
 }
 
@@ -259,6 +264,9 @@ async fn health_and_replica_header() {
     let h = b.get_with("/health", &[]).await;
     assert_eq!(h.json()["version"], "test");
     assert_eq!(h.headers.get("x-served-by").unwrap(), "test-replica");
+    let csp = h.headers.get("content-security-policy").unwrap().to_str().unwrap();
+    assert!(csp.contains("frame-ancestors 'none'") && csp.contains("script-src 'self'"));
+    assert_eq!(h.headers.get("x-content-type-options").unwrap(), "nosniff");
     let root = b.get_with("/", &[("accept", "application/json")]).await;
     assert_eq!(root.json()["replica"], "test-replica");
     assert_eq!(b.get("/").await.location(), "/login");

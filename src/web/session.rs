@@ -51,6 +51,18 @@ pub async fn sign_in(session: &Session, user_id: i64) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Ends the browser's session (portal and SSO) and revokes the module logins made in it
+pub async fn end_session(st: &AppState, session: &Session) -> anyhow::Result<()> {
+    if let Some(sid) = session.get::<String>(KEY_SID).await? {
+        sqlx::query("UPDATE oauth_grants SET revoked = TRUE WHERE session_id = $1")
+            .bind(sid)
+            .execute(&st.db)
+            .await?;
+    }
+    session.flush().await?;
+    Ok(())
+}
+
 /// The signed-in user and when they typed the password, if the session is still valid
 pub async fn session_user(st: &AppState, session: &Session) -> anyhow::Result<Option<(User, i64)>> {
     let Some(uid) = session.get::<i64>(KEY_UID).await? else {

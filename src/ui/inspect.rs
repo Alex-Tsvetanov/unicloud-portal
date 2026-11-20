@@ -85,7 +85,7 @@ async fn students_view(st: &AppState, cu: &CurrentUser, q: &str, msg: Option<(&s
                                             @if can_create {
                                                 form.inline method="post" action={"/inspect/students/" (id) "/status"} {
                                                     (csrf_field(&cu.csrf))
-                                                    select name="status" onchange="this.form.requestSubmit()" aria-label="Статус" {
+                                                    select name="status" data-autosubmit="true" aria-label="Статус" {
                                                         @for (v, t) in &statuses { option value=(v) selected[v == status] { (t) } }
                                                     }
                                                 }
